@@ -6,17 +6,17 @@ namespace bootstrap {
 
 		PERESOURCE PiDDBLock; PRTL_AVL_TABLE PiDDBCacheTable;
 
-		uintptr_t PiDDBLockPtr = NULL;
-		uintptr_t PiDDBCacheTablePtr = NULL;
+		ULONG_PTR PiDDBLockPtr = NULL;
+		ULONG_PTR PiDDBCacheTablePtr = NULL;
 
 		/* Win10 Signature */
-		PiDDBLockPtr = (uintptr_t) UMEM::find_pattern(
+		PiDDBLockPtr = (ULONG_PTR) UMEM::find_pattern(
 			(PVOID) ntos_image_base,
 			E("\x8B\xD8\x85\xC0\x0F\x88\x00\x00\x00\x00\x65\x48\x8B\x04\x25\x00\x00\x00\x00\x66\xFF\x88\x00\x00\x00\x00\xB2\x00\x48\x8D\x0D\x00\x00\x00\x00\xE8\x00\x00\x00\x00\x4C\x8B\x8C\x24\x00\x00\x00\x00\x48\x8D\x4C\x24"),
 			E("xxxxxx????xxxxx????xxx????x?xxx????x????xxxx????xxxx"));
 		if (PiDDBLockPtr == NULL) {
 			/* Win11 Signature */
-			PiDDBLockPtr = (uintptr_t)UMEM::find_pattern(
+			PiDDBLockPtr = (ULONG_PTR)UMEM::find_pattern(
 				(PVOID) ntos_image_base,
 				E("\x48\x8B\x0D\x00\x00\x00\x00\x48\x85\xC9\x0F\x85\x00\x00\x00\x00\x48\x8D\x0D\x00\x00\x00\x00\xE8\x00\x00\x00\x00\xE8"),
 				E("xxx????xxxxx????xxx????x????x"));
@@ -34,7 +34,7 @@ namespace bootstrap {
 		}
 
 		silence(E("[vmm.kernelbootstrap] Found PiDDBLock Address\n"));
-		PiDDBCacheTablePtr = (uintptr_t)UMEM::find_pattern(
+		PiDDBCacheTablePtr = (ULONG_PTR)UMEM::find_pattern(
 			(PVOID) ntos_image_base,
 			E("\x66\x03\xD2\x48\x8D\x0D"),
 			E("xxxxxx")
@@ -276,7 +276,7 @@ namespace bootstrap {
 
 		// Win10
 		PVOID SignatureAddress = (PVOID)UMEM::find_pattern_in_section(
-			(uintptr_t)CiBase,
+			(ULONG_PTR)CiBase,
 			E("\x48\x8B\x1D\x00\x00\x00\x00\xEB\x00\xF7\x43\x40\x00\x20\x00\x00"),
 			E("xxx????x?xxxxxxx"),
 			E("PAGE")
@@ -284,7 +284,7 @@ namespace bootstrap {
 		if (SignatureAddress == NULL) {
 			// Win11
 			SignatureAddress = (PVOID)UMEM::find_pattern_in_section(
-				(uintptr_t)CiBase,
+				(ULONG_PTR)CiBase,
 				E("\x48\x8B\x1D\x00\x00\x00\x00\xEB\x00\xF7\x43\x40\x00\x20\x00\x00"),
 				E("xxx????x?xxxxxxx"),
 				E("PAGE")

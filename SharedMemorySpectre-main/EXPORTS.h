@@ -1,7 +1,5 @@
 #pragma once
 #include "includes.h"
-#include <cstdint>
-
 using addr_t = unsigned char*;
 using double_t = double;
 using float_t = float;
@@ -82,14 +80,14 @@ namespace EXPORTS {
 		PULONG                   ReturnLength
 	);
 
-	uintptr_t ps_initial_system_process();
+	ULONG_PTR ps_initial_system_process();
 
 	bool ps_get_process_exit_status(
-		uintptr_t Process
+		ULONG_PTR Process
 	);
 
 	unicode_string_t* ps_query_full_process_image_name(
-		std::uintptr_t process
+		ULONG_PTR process
 	);
 
 	void* ps_get_process_section_base_address(

@@ -6,7 +6,48 @@
 #include <Windows.h>
 #include <utility>
 #endif
-#include  <Intrin.h> 
+
+// _AddressOfReturnAddress is compiler-provided. Declaring it directly keeps
+// the kernel build independent of the user-mode VCRuntime headers pulled in by
+// <intrin.h> on recent MSVC toolsets.
+extern "C" void* _AddressOfReturnAddress(void);
+#pragma intrinsic(_AddressOfReturnAddress)
+
+namespace CallSpooferTraits
+{
+	template <typename Type>
+	struct remove_reference
+	{
+		using type = Type;
+	};
+
+	template <typename Type>
+	struct remove_reference<Type&>
+	{
+		using type = Type;
+	};
+
+	template <typename Type>
+	struct remove_reference<Type&&>
+	{
+		using type = Type;
+	};
+
+	template <typename Type>
+	using remove_reference_t = typename remove_reference<Type>::type;
+
+	template <typename Left, typename Right>
+	struct is_same
+	{
+		static constexpr bool value = false;
+	};
+
+	template <typename Type>
+	struct is_same<Type, Type>
+	{
+		static constexpr bool value = true;
+	};
+}
 
 /*
  *  Copyright 2022 Barracudach
@@ -34,7 +75,7 @@
 #pragma optimize("", off)
 #define SPOOF_FUNC CallSpoofer::SpoofFunction spoof(_AddressOfReturnAddress());
 #ifdef _KERNEL_MODE
-#define SPOOF_CALL(ret_type,name) (CallSpoofer::SafeCall<ret_type,std::remove_reference_t<decltype(*name)>>(name))
+#define SPOOF_CALL(ret_type,name) (CallSpoofer::SafeCall<ret_type, CallSpooferTraits::remove_reference_t<decltype(*name)>>(name))
 #else
 #define SPOOF_CALL(name) (CallSpoofer::SafeCall(name))
 #endif
@@ -45,16 +86,9 @@
 
 namespace CallSpoofer
 {
-#ifdef _KERNEL_MODE
-	typedef unsigned __int64  uintptr_t, size_t;
-#pragma region std::forward
-
-#pragma endregion 
-
-#else
+#ifndef _KERNEL_MODE
 	using namespace std;
 #endif
-
 }
 
 namespace CallSpoofer
@@ -62,36 +96,36 @@ namespace CallSpoofer
 	class SpoofFunction
 	{
 	public:
-		uintptr_t temp = 0;
-		const uintptr_t xor_key = 0xff00ff00ff00ff00;
+		ULONG_PTR temp = 0;
+		const ULONG_PTR xor_key = 0xff00ff00ff00ff00;
 		/*
-		const uintptr_t xor_key = 0xff00ff00ff00ff00;
+		const ULONG_PTR xor_key = 0xff00ff00ff00ff00;
 		*/
 		void* ret_addr_in_stack = 0;
 
 		SpoofFunction(void* addr) :ret_addr_in_stack(addr)
 		{
-			temp = *(uintptr_t*)ret_addr_in_stack;
+			temp = *(ULONG_PTR*)ret_addr_in_stack;
 			temp ^= xor_key;
-			*(uintptr_t*)ret_addr_in_stack = 0;
+			*(ULONG_PTR*)ret_addr_in_stack = 0;
 		}
 		~SpoofFunction()
 		{
 			temp ^= xor_key;
-			*(uintptr_t*)ret_addr_in_stack = temp;
+			*(ULONG_PTR*)ret_addr_in_stack = temp;
 		}
 	};
 
 #ifdef _KERNEL_MODE
-	__forceinline PVOID LocateShellCode(PVOID func, size_t size = 500)
+	__forceinline PVOID LocateShellCode(PVOID func, SIZE_T size = 500)
 	{
-		void* addr = ExAllocatePoolWithTag(NonPagedPool, size, (ULONG)"File");
+		void* addr = ExAllocatePoolWithTag(NonPagedPool, size, 'CpSC');
 		if (!addr)
 			return nullptr;
 		return memcpy(addr, func, size);
 	}
 #else
-	__forceinline PVOID LocateShellCode(PVOID func, size_t size = SHELLCODE_GENERATOR_SIZE)
+	__forceinline PVOID LocateShellCode(PVOID func, SIZE_T size = SHELLCODE_GENERATOR_SIZE)
 	{
 		void* addr = VirtualAlloc(NULL, size, MEM_COMMIT, PAGE_EXECUTE_READWRITE);
 		if (!addr)
@@ -116,23 +150,23 @@ namespace CallSpoofer
 		using this_func_type = decltype(ShellCodeGenerator<Func, Args&...>);
 		using return_type = typename std::invoke_result<Func, Args...>::type;
 #endif
-		const uintptr_t xor_key = 0xff00ff00ff00ff00;
+		const ULONG_PTR xor_key = 0xff00ff00ff00ff00;
 		void* ret_addr_in_stack = _AddressOfReturnAddress();
-		uintptr_t temp = *(uintptr_t*)ret_addr_in_stack;
+		ULONG_PTR temp = *(ULONG_PTR*)ret_addr_in_stack;
 		temp ^= xor_key;
-		*(uintptr_t*)ret_addr_in_stack = 0;
+		*(ULONG_PTR*)ret_addr_in_stack = 0;
 
-		if constexpr (std::is_same<return_type, void>::value)
+		if constexpr (CallSpooferTraits::is_same<return_type, void>::value)
 		{
 			f(args...);
 			temp ^= xor_key;
-			*(uintptr_t*)ret_addr_in_stack = temp;
+			*(ULONG_PTR*)ret_addr_in_stack = temp;
 		}
 		else
 		{
 			return_type&& ret = f(args...);
 			temp ^= xor_key;
-			*(uintptr_t*)ret_addr_in_stack = temp;
+			*(ULONG_PTR*)ret_addr_in_stack = temp;
 			return ret;
 		}
 	}
@@ -170,7 +204,7 @@ namespace CallSpoofer
 
 			p_shell_code_generator_type p_shellcode{};
 
-			static size_t count{};
+			static SIZE_T count{};
 			static p_shell_code_generator_type orig_generator[MAX_FUNC_BUFFERED]{};
 			static p_shell_code_generator_type alloc_generator[MAX_FUNC_BUFFERED]{};
 

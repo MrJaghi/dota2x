@@ -8,7 +8,6 @@
 #include <ntdef.h>
 #include <ntimage.h>
 #include <minwindef.h>
-#include <stdarg.h>
 #include "ia32.h"
 #include "NTOS.h"
 #include "EXPORTS.h"
@@ -133,8 +132,8 @@ void silence(PCSTR Msg, Args... args) {
     }
 }
 
-extern uintptr_t ntos_image_base;
-extern uintptr_t kernel_base;
+extern ULONG_PTR ntos_image_base;
+extern ULONG_PTR kernel_base;
 extern PVOID sig;
 
 
@@ -415,21 +414,21 @@ typedef struct _PAGE
 
 typedef union _pte_t
 {
-    uintptr_t value;
+    ULONG_PTR value;
     struct
     {
-        uintptr_t present : 1;
-        uintptr_t write : 1;
-        uintptr_t user : 1;
-        uintptr_t write_through : 1;
-        uintptr_t cache_disable : 1;
-        uintptr_t accessed : 1;
-        uintptr_t dirty : 1;
-        uintptr_t large_page : 1;
-        uintptr_t global : 1;
-        uintptr_t ignored_2 : 3;
-        uintptr_t page_frame_number : 40;
-        uintptr_t ignored_1 : 11;
-        uintptr_t execution_disabled : 1;
+        ULONG_PTR present : 1;
+        ULONG_PTR write : 1;
+        ULONG_PTR user : 1;
+        ULONG_PTR write_through : 1;
+        ULONG_PTR cache_disable : 1;
+        ULONG_PTR accessed : 1;
+        ULONG_PTR dirty : 1;
+        ULONG_PTR large_page : 1;
+        ULONG_PTR global : 1;
+        ULONG_PTR ignored_2 : 3;
+        ULONG_PTR page_frame_number : 40;
+        ULONG_PTR ignored_1 : 11;
+        ULONG_PTR execution_disabled : 1;
     } fields;
 } pte_t;

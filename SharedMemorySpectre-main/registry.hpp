@@ -7,7 +7,7 @@ NTSTATUS ReadRegistryADDR() {
 	HANDLE KeyHandle;
 	NTSTATUS Status;
 	ULONG ResultLength;
-	uintptr_t Buffer;
+	ULONG_PTR Buffer;
 
 	RtlInitUnicodeString(&RegPath, L"\\Registry\\Machine\\");
 	RtlInitUnicodeString(&AddrValueName, L"oAddr");
@@ -23,8 +23,8 @@ NTSTATUS ReadRegistryADDR() {
 	Status = ZwQueryValueKey(KeyHandle, &AddrValueName, KeyValuePartialInformation, &KeyValueInfo, sizeof(KeyValueInfo) + sizeof(DWORD), &ResultLength);
 
 	if (NT_SUCCESS(Status)) {
-		if (KeyValueInfo.Type == REG_QWORD && KeyValueInfo.DataLength == sizeof(uintptr_t)) {
-			RtlCopyMemory(&Buffer, KeyValueInfo.Data, sizeof(uintptr_t));
+		if (KeyValueInfo.Type == REG_QWORD && KeyValueInfo.DataLength == sizeof(ULONG_PTR)) {
+			RtlCopyMemory(&Buffer, KeyValueInfo.Data, sizeof(ULONG_PTR));
 			oAddr = Buffer;
 		}
 		else {

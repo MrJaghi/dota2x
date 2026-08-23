@@ -1,7 +1,4 @@
 #include <cmath>
-#include <cstdlib>
-#include <math.h>
-#include <stdlib.h>
 
 #ifndef NOMINMAX
 #define NOMINMAX
@@ -14,7 +11,7 @@
 #include <cstdio>
 
 #include "Memory.h"
-#include "Math.h"
+#include "VectorMath.h"
 #include "Offsets.h"
 #include "Overlay.h"
 #include "Config.h"

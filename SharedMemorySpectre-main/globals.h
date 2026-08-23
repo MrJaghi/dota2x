@@ -2,6 +2,6 @@
 #include "driver.h"
 
 int oPid;
-uintptr_t oAddr;
+ULONG_PTR oAddr;
 
 int gPid;

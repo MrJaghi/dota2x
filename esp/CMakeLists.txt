@@ -16,7 +16,7 @@ add_executable(AzhengESP
 	${IMGUI_DIR}/backends/imgui_impl_dx11.cpp
 )
 
-target_include_directories(AzhengESP PRIVATE ${IMGUI_DIR} ${IMGUI_DIR}/backends ${CMAKE_CURRENT_SOURCE_DIR})
+target_include_directories(AzhengESP PRIVATE ${IMGUI_DIR} ${IMGUI_DIR}/backends)
 
 target_link_libraries(AzhengESP PRIVATE user32 gdi32 d3d11 dxgi)
 

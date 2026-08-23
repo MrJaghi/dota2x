@@ -15,7 +15,7 @@ BOOLEAN bDataCompare(const BYTE* pData, const BYTE* bMask, const char* szMask) {
 	return (*szMask) == 0;
 }
 
-PVOID FindSection(const char* sectionName, uintptr_t modulePtr, PULONG size) {
+PVOID FindSection(const char* sectionName, ULONG_PTR modulePtr, PULONG size) {
 	size_t namelength = strlen(sectionName);
 	PIMAGE_NT_HEADERS headers = (PIMAGE_NT_HEADERS)(modulePtr + ((PIMAGE_DOS_HEADER)modulePtr)->e_lfanew);
 	PIMAGE_SECTION_HEADER sections = IMAGE_FIRST_SECTION(headers);
@@ -36,7 +36,7 @@ PVOID FindSection(const char* sectionName, uintptr_t modulePtr, PULONG size) {
 }
 
 
-uintptr_t FindSectionAtKernel(HANDLE device_handle, const char* sectionName, uintptr_t modulePtr, PULONG size) {
+ULONG_PTR FindSectionAtKernel(HANDLE device_handle, const char* sectionName, ULONG_PTR modulePtr, PULONG size) {
 	if (!modulePtr)
 		return 0;
 
@@ -45,7 +45,7 @@ uintptr_t FindSectionAtKernel(HANDLE device_handle, const char* sectionName, uin
 	RtlCopyMemory(headers, (PVOID)modulePtr, sizeof(headers));
 
 	ULONG sectionSize = 0;
-	uintptr_t section = (uintptr_t)FindSection(sectionName, (uintptr_t)headers, &sectionSize);
+	ULONG_PTR section = (ULONG_PTR)FindSection(sectionName, (ULONG_PTR)headers, &sectionSize);
 	if (!section || !sectionSize) {
 		DbgPrint("[-] Can't find section\n");
 		return 0;
@@ -53,10 +53,10 @@ uintptr_t FindSectionAtKernel(HANDLE device_handle, const char* sectionName, uin
 	if (size)
 		*size = sectionSize;
 
-	return section - (uintptr_t)headers + modulePtr;
+	return section - (ULONG_PTR)headers + modulePtr;
 }
 
-uintptr_t find_pattern(uintptr_t base, size_t range, const char* pattern, const char* mask)
+ULONG_PTR find_pattern(ULONG_PTR base, size_t range, const char* pattern, const char* mask)
 {
 	const auto check_mask = [](const char* base, const char* pattern, const char* mask) -> bool
 		{
@@ -84,7 +84,7 @@ uintptr_t find_pattern(uintptr_t base, size_t range, const char* pattern, const 
 	return NULL;
 }
 
-uintptr_t find_pattern(uintptr_t base, const char* pattern, const char* mask)
+ULONG_PTR find_pattern(ULONG_PTR base, const char* pattern, const char* mask)
 {
 	const PIMAGE_NT_HEADERS headers = (PIMAGE_NT_HEADERS)(base + ((PIMAGE_DOS_HEADER)base)->e_lfanew);
 	const PIMAGE_SECTION_HEADER sections = IMAGE_FIRST_SECTION(headers);
@@ -196,26 +196,26 @@ NTSTATUS ReadPhysicalAddress(LONGLONG TargetAddress, PVOID lpBuffer, SIZE_T Size
 }
 
 #define PAGE_OFFSET_SIZE 12
-static const uint64_t PMASK = (~0xfull << 8) & 0xfffffffffull;
+static const UINT64 PMASK = (~0xfull << 8) & 0xfffffffffull;
 
-uint64_t TranslateLinearAddress2(uint64_t directoryTableBase, uint64_t virtualAddress) {
+UINT64 TranslateLinearAddress2(UINT64 directoryTableBase, UINT64 virtualAddress) {
 	// Mask to clear the last 12 bits (page offset)
 	directoryTableBase &= ~0xf;
 
-	uint64_t pageOffset = virtualAddress & ~(~0ul << PAGE_OFFSET_SIZE);
-	uint64_t pte = ((virtualAddress >> 12) & (0x1ffll));
-	uint64_t pt = ((virtualAddress >> 21) & (0x1ffll));
-	uint64_t pd = ((virtualAddress >> 30) & (0x1ffll));
-	uint64_t pdp = ((virtualAddress >> 39) & (0x1ffll));
+	UINT64 pageOffset = virtualAddress & ~(~0ul << PAGE_OFFSET_SIZE);
+	UINT64 pte = ((virtualAddress >> 12) & (0x1ffll));
+	UINT64 pt = ((virtualAddress >> 21) & (0x1ffll));
+	UINT64 pd = ((virtualAddress >> 30) & (0x1ffll));
+	UINT64 pdp = ((virtualAddress >> 39) & (0x1ffll));
 
 	SIZE_T readsize = 0;
-	uint64_t pdpe = 0;
+	UINT64 pdpe = 0;
 
 	// Read the Physical Page Directory Pointer Entry (PDPTE)
 	ReadPhysicalAddress(directoryTableBase + 8 * pdp, &pdpe, sizeof(pdpe), &readsize);
 	if (~pdpe & 1) return 0;
 
-	uint64_t pde = 0;
+	UINT64 pde = 0;
 	// Read the Physical Page Directory Entry (PDE)
 	ReadPhysicalAddress((pdpe & PMASK) + 8 * pd, &pde, sizeof(pde), &readsize);
 	if (~pde & 1) return 0;
@@ -225,7 +225,7 @@ uint64_t TranslateLinearAddress2(uint64_t directoryTableBase, uint64_t virtualAd
 		return (pde & (~0ull << 42 >> 12)) + (virtualAddress & ~(~0ull << 30));
 	}
 
-	uint64_t pteAddr = 0;
+	UINT64 pteAddr = 0;
 	// Read the Physical Page Table Entry (PTE)
 	ReadPhysicalAddress((pde & PMASK) + 8 * pt, &pteAddr, sizeof(pteAddr), &readsize);
 	if (~pteAddr & 1) return 0;
@@ -245,22 +245,22 @@ uint64_t TranslateLinearAddress2(uint64_t directoryTableBase, uint64_t virtualAd
 	// Return the final physical address by adding the page offset
 	return virtualAddress + pageOffset;
 }
-uint64_t TranslateLinearAddress(uint64_t directoryTableBase, uint64_t virtualAddress) {
+UINT64 TranslateLinearAddress(UINT64 directoryTableBase, UINT64 virtualAddress) {
 	directoryTableBase &= ~0xf;
 
-	uint64_t pageOffset = virtualAddress & ~(~0ul << PAGE_OFFSET_SIZE);
-	uint64_t pte = ((virtualAddress >> 12) & (0x1ffll));
-	uint64_t pt = ((virtualAddress >> 21) & (0x1ffll));
-	uint64_t pd = ((virtualAddress >> 30) & (0x1ffll));
-	uint64_t pdp = ((virtualAddress >> 39) & (0x1ffll));
+	UINT64 pageOffset = virtualAddress & ~(~0ul << PAGE_OFFSET_SIZE);
+	UINT64 pte = ((virtualAddress >> 12) & (0x1ffll));
+	UINT64 pt = ((virtualAddress >> 21) & (0x1ffll));
+	UINT64 pd = ((virtualAddress >> 30) & (0x1ffll));
+	UINT64 pdp = ((virtualAddress >> 39) & (0x1ffll));
 
 	SIZE_T readsize = 0;
-	uint64_t pdpe = 0;
+	UINT64 pdpe = 0;
 	ReadPhysicalAddress(directoryTableBase + 8 * pdp, &pdpe, sizeof(pdpe), &readsize);
 	if (~pdpe & 1)
 		return 0;
 
-	uint64_t pde = 0;
+	UINT64 pde = 0;
 	ReadPhysicalAddress((pdpe & PMASK) + 8 * pd, &pde, sizeof(pde), &readsize);
 	if (~pde & 1)
 		return 0;
@@ -269,7 +269,7 @@ uint64_t TranslateLinearAddress(uint64_t directoryTableBase, uint64_t virtualAdd
 	if (pde & 0x80)
 		return (pde & (~0ull << 42 >> 12)) + (virtualAddress & ~(~0ull << 30));
 
-	uint64_t pteAddr = 0;
+	UINT64 pteAddr = 0;
 	ReadPhysicalAddress((pde & PMASK) + 8 * pt, &pteAddr, sizeof(pteAddr), &readsize);
 	if (~pteAddr & 1)
 		return 0;

@@ -1,9 +1,9 @@
 #include "NTOS.h"
 
 _declspec(noinline) auto resolve_address(
-    uintptr_t Instruction,
+    ULONG_PTR Instruction,
     ULONG OffsetOffset,
-    ULONG InstructionSize) -> uintptr_t 
+    ULONG InstructionSize) -> ULONG_PTR
 {
     LONG RipOffset = *(PLONG)(Instruction + OffsetOffset);
     auto ResolvedAddr = (
@@ -265,7 +265,7 @@ namespace UMEM {
         return NULL;
     }
 
-    auto get_pattern(uintptr_t base, size_t range, const char* pattern, const char* mask) -> uintptr_t
+    auto get_pattern(ULONG_PTR base, size_t range, const char* pattern, const char* mask) -> ULONG_PTR
     {
         const auto check_mask = [](const char* base, const char* pattern, const char* mask) -> bool
             {
@@ -293,7 +293,7 @@ namespace UMEM {
         return NULL;
     }
 
-    auto find_pattern_in_section(uintptr_t Base, CHAR* Pattern, CHAR* Mask, char* Scan_Section) -> uintptr_t
+    auto find_pattern_in_section(ULONG_PTR Base, CHAR* Pattern, CHAR* Mask, char* Scan_Section) -> ULONG_PTR
     {
         SPOOF_FUNC;
 
@@ -427,7 +427,7 @@ namespace NTOS {
         return info;
     }
 
-    uintptr_t get_kernel_module(const char* name)
+    ULONG_PTR get_kernel_module(const char* name)
     {
         const auto to_lower = [](char* string) -> const char* {
             for (char* pointer = string; *pointer != '\0'; ++pointer) {
@@ -448,7 +448,7 @@ namespace NTOS {
             if (strcmp(to_lower((char*)mod.FullPathName + mod.OffsetToFileName), name) == 0) {
                 const void* address = mod.ImageBase;
                 ExFreePool(info);
-                return (uintptr_t)address;
+                return (ULONG_PTR)address;
             }
         }
 
@@ -456,21 +456,20 @@ namespace NTOS {
         return NULL;
     }
 
-    _declspec(noinline) auto get_ntos_base_address() -> uintptr_t {
-        typedef unsigned char uint8_t;
-        auto Idt_base = reinterpret_cast<uintptr_t>(KeGetPcr()->IdtBase);
-        auto align_page = *reinterpret_cast<uintptr_t*>(Idt_base + oxorany(4)) >> oxorany(0xc) << oxorany(0xc);
+    _declspec(noinline) auto get_ntos_base_address() -> ULONG_PTR {
+        auto Idt_base = reinterpret_cast<ULONG_PTR>(KeGetPcr()->IdtBase);
+        auto align_page = *reinterpret_cast<ULONG_PTR*>(Idt_base + oxorany(4)) >> oxorany(0xc) << oxorany(0xc);
 
         for (; align_page; align_page -= oxorany(PAGE_SIZE))
         {
             for (int index = 0; index < oxorany(PAGE_SIZE) - 0x7; index++)
             {
-                auto current_address = static_cast<intptr_t>(align_page) + index;
+                auto current_address = static_cast<LONG_PTR>(align_page) + index;
 
-                if (*reinterpret_cast<uint8_t*>(current_address) == oxorany(0x48)
-                    && *reinterpret_cast<uint8_t*>(current_address + oxorany(1)) == oxorany(0x8D)
-                    && *reinterpret_cast<uint8_t*>(current_address + oxorany(2)) == oxorany(0x1D)
-                    && *reinterpret_cast<uint8_t*>(current_address + oxorany(6)) == oxorany(0xFF)) //48 8d 1D ?? ?? ?? FF
+                if (*reinterpret_cast<UINT8*>(current_address) == oxorany(0x48)
+                    && *reinterpret_cast<UINT8*>(current_address + oxorany(1)) == oxorany(0x8D)
+                    && *reinterpret_cast<UINT8*>(current_address + oxorany(2)) == oxorany(0x1D)
+                    && *reinterpret_cast<UINT8*>(current_address + oxorany(6)) == oxorany(0xFF)) //48 8d 1D ?? ?? ?? FF
                 {
                     // rva our virtual address lol
                     auto Ntosbase = resolve_address(current_address, oxorany(3), oxorany(7));
@@ -498,12 +497,12 @@ namespace NTOS {
             return nullptr;  // Return nullptr on failure instead of `false`.
         }
 
-        auto m_nt_header = reinterpret_cast<nt_headers_t*>(reinterpret_cast<uint64_t>(dos_header) + dos_header->m_lfanew);
+        auto m_nt_header = reinterpret_cast<nt_headers_t*>(reinterpret_cast<UINT64>(dos_header) + dos_header->m_lfanew);
         if (!m_nt_header->is_valid()) {
             return nullptr;  // Return nullptr on failure instead of `false`.
         }
 
-        auto library{ reinterpret_cast<int8_t*>(dos_header) };
+        auto library{ reinterpret_cast<INT8*>(dos_header) };
         auto export_directory =
             reinterpret_cast<export_directory_t*>(NTOS + m_nt_header->m_export_table.m_virtual_address);
         if (!export_directory->m_address_of_functions
@@ -512,11 +511,11 @@ namespace NTOS {
             return nullptr;  // Return nullptr on failure instead of an empty object.
         }
 
-        auto names{ reinterpret_cast<int32_t*>(library + export_directory->m_address_of_names) };
-        auto functions{ reinterpret_cast<int32_t*>(library + export_directory->m_address_of_functions) };
-        auto ordinals{ reinterpret_cast<int16_t*>(library + export_directory->m_address_of_names_ordinals) };
+        auto names{ reinterpret_cast<INT32*>(library + export_directory->m_address_of_names) };
+        auto functions{ reinterpret_cast<INT32*>(library + export_directory->m_address_of_functions) };
+        auto ordinals{ reinterpret_cast<INT16*>(library + export_directory->m_address_of_names_ordinals) };
 
-        for (int32_t i = 0; i < export_directory->m_number_of_names; i++) {
+        for (INT32 i = 0; i < export_directory->m_number_of_names; i++) {
             auto current_name{ library + names[i] };
             auto current_function{ library + functions[ordinals[i]] };
 
@@ -528,7 +527,7 @@ namespace NTOS {
         return nullptr;  // Return nullptr on failure instead of 0.
     }
 
-    uintptr_t get_eprocess(const wchar_t* process_name)
+    ULONG_PTR get_eprocess(const wchar_t* process_name)
     {
         static auto KeCapturePersistentThreadState_t = NTOS::find_export<addr_t>(E("KeCapturePersistentThreadState"));
         if (KeCapturePersistentThreadState_t == NULL) {
@@ -540,7 +539,7 @@ namespace NTOS {
             || KeCapturePersistentThreadState_t[0x2] != oxorany(0x8d))
             KeCapturePersistentThreadState_t++;
         auto PsActiveProcessHead = *reinterpret_cast<list_entry_t**>
-            (&KeCapturePersistentThreadState_t[0x8] + *reinterpret_cast<int32_t*>(&KeCapturePersistentThreadState_t[0x4]));
+            (&KeCapturePersistentThreadState_t[0x8] + *reinterpret_cast<INT32*>(&KeCapturePersistentThreadState_t[0x4]));
 
         auto process_list_head = PsActiveProcessHead;
         if (!process_list_head) {

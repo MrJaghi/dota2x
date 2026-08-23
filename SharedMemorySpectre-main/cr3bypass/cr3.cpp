@@ -1,7 +1,6 @@
 #include <ntifs.h>
 #include <windef.h>
 #include "cr3.h"
-#include <cstdint>
 #include "structs.h"
 
 
@@ -275,12 +274,12 @@ typedef union _virt_addr_t
 	void* value;
 	struct
 	{
-		uintptr_t offset : 12;
-		uintptr_t pt_index : 9;
-		uintptr_t pd_index : 9;
-		uintptr_t pdpt_index : 9;
-		uintptr_t pml4_index : 9;
-		uintptr_t reserved : 16;
+		ULONG_PTR offset : 12;
+		ULONG_PTR pt_index : 9;
+		ULONG_PTR pd_index : 9;
+		ULONG_PTR pdpt_index : 9;
+		ULONG_PTR pml4_index : 9;
+		ULONG_PTR reserved : 16;
 	};
 } virt_addr_t, * pvirt_addr_t;
 
@@ -291,7 +290,7 @@ NTSTATUS read(PVOID target_address, PVOID buffer, SIZE_T size, SIZE_T* bytes_rea
 	// return MmCopyMemory(buffer, to_read, size, MM_COPY_MEMORY_VIRTUAL, bytes_read); // read virtual (doesnt work)
 	return MmCopyMemory(buffer, to_read, size, MM_COPY_MEMORY_PHYSICAL, bytes_read); // read physical
 }
-auto read_physical(uintptr_t address, PVOID buffer, size_t size, size_t* bytes) -> NTSTATUS
+auto read_physical(ULONG_PTR address, PVOID buffer, size_t size, size_t* bytes) -> NTSTATUS
 {
 
 	MM_COPY_ADDRESS target_address = { 0 };
@@ -456,7 +455,7 @@ typedef struct _MMPFN
 		}; /* size: 0x0008 */
 	} /* size: 0x0008 */ u4;
 } MMPFN, * PMMPFN; /* size: 0x0030 */
-uintptr_t dirbase_from_base_address(void* base)
+ULONG_PTR dirbase_from_base_address(void* base)
 {
 	__try
 	{
@@ -479,11 +478,11 @@ uintptr_t dirbase_from_base_address(void* base)
 			if (!elem->BaseAddress.QuadPart || !elem->NumberOfBytes.QuadPart)
 				break;
 
-			uintptr_t current_phys_address = elem->BaseAddress.QuadPart;
+			ULONG_PTR current_phys_address = elem->BaseAddress.QuadPart;
 
 			for (int j = 0; j < (elem->NumberOfBytes.QuadPart / 0x1000); j++, current_phys_address += 0x1000)
 			{
-				_MMPFN* pnfinfo = (_MMPFN*)((uintptr_t)g_mmonp_MmPfnDatabasex + (current_phys_address >> 12) * sizeof(_MMPFN));
+				_MMPFN* pnfinfo = (_MMPFN*)((ULONG_PTR)g_mmonp_MmPfnDatabasex + (current_phys_address >> 12) * sizeof(_MMPFN));
 
 				if (pnfinfo->u4.PteFrame == (current_phys_address >> 12))
 				{

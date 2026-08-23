@@ -1,7 +1,7 @@
 #include "driver.h"
 #include "communication.hpp"
-uintptr_t ntos_image_base;
-uintptr_t kernel_base;
+ULONG_PTR ntos_image_base;
+ULONG_PTR kernel_base;
 PVOID sig;
 
 _GLOBAL_UEX GLOBAL_UEX;

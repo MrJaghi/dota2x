@@ -1,8 +1,5 @@
 #pragma once
 #include <cmath>
-#include <cstdlib>
-#include <math.h>
-#include <stdlib.h>
 #include <cstdint>
 
 struct Vector3 {

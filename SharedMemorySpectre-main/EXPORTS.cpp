@@ -406,17 +406,17 @@ namespace EXPORTS {
 			);
 	}
 
-	uintptr_t ps_initial_system_process() {
+	ULONG_PTR ps_initial_system_process() {
 		auto function_address = NTOS::find_export<addr_t>(E("PsInitialSystemProcess"));
 		if (!function_address) {
 			return {};
 		}
 
-		return *reinterpret_cast<uintptr_t*>(function_address);
+		return *reinterpret_cast<ULONG_PTR*>(function_address);
 	}
 
 	bool ps_get_process_exit_status(
-		uintptr_t Process
+		ULONG_PTR Process
 	) {
 		auto function_address = NTOS::find_export<addr_t>(E("PsGetProcessExitStatus"));
 		if (!function_address) {
@@ -424,14 +424,14 @@ namespace EXPORTS {
 		}
 
 		using function_t = NTSTATUS(
-			uintptr_t Process
+			ULONG_PTR Process
 		);
 
 		return reinterpret_cast<function_t*>(function_address)(Process) == 0x103;
 	}
 
 	unicode_string_t* ps_query_full_process_image_name(
-		std::uintptr_t process
+		ULONG_PTR process
 	) {
 		auto function_address = NTOS::find_export<addr_t>(E("SeLocateProcessImageName"));
 		if (!function_address) return { };
@@ -441,7 +441,7 @@ namespace EXPORTS {
 			|| function_address[0x2] != 0xe8)
 			function_address++;
 
-		auto ps_rva{ &function_address[0x7] + *reinterpret_cast<std::int32_t*>(&function_address[0x3]) };
+		auto ps_rva{ &function_address[0x7] + *reinterpret_cast<INT32*>(&function_address[0x3]) };
 		if (!ps_rva)
 			return {};
 
@@ -451,7 +451,7 @@ namespace EXPORTS {
 			ps_rva++;
 
 		return *reinterpret_cast<unicode_string_t**>
-			(process + *reinterpret_cast<std::int32_t*>(&ps_rva[0x9]));
+			(process + *reinterpret_cast<INT32*>(&ps_rva[0x9]));
 	}
 
 	void* ps_get_process_section_base_address(

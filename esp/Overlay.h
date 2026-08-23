@@ -1,8 +1,5 @@
 #pragma once
 #include <cmath>
-#include <cstdlib>
-#include <math.h>
-#include <stdlib.h>
 
 #ifndef NOMINMAX
 #define NOMINMAX

@@ -1,5 +1,4 @@
 #pragma once
-#include <cstdint>
 #include <windef.h>
 #include "encrypt.h"
 
@@ -18,11 +17,10 @@
 #define driver_api inline
 #include "includes.h"
 #include <ntimage.h>
-#include <xtr1common>
 #include "callstack.h"
 
-extern uintptr_t ntos_image_base;
-extern uintptr_t kernel_base;
+extern ULONG_PTR ntos_image_base;
+extern ULONG_PTR kernel_base;
 
 namespace kli
 {
@@ -111,11 +109,11 @@ namespace kli
 			constexpr static auto value = Value;
 		};
 
-#define _KLI_HASH_RTS(str) (::kli::hash::hash_fnv1a<UINT64, std::remove_const_t<std::remove_reference_t<decltype(*(str))>>, false>((str)))
-#define _KLI_HASH_RTS_TOLOWER(str) (::kli::hash::hash_fnv1a<UINT64, std::remove_const_t<std::remove_reference_t<decltype(*(str))>>, true>((str)))
+#define _KLI_HASH_RTS(str) (::kli::hash::hash_fnv1a<UINT64, SKCRYPTUTILS::remove_const_u<SKCRYPTUTILS::remove_referencee_t<decltype(*(str))>>, false>((str)))
+#define _KLI_HASH_RTS_TOLOWER(str) (::kli::hash::hash_fnv1a<UINT64, SKCRYPTUTILS::remove_const_u<SKCRYPTUTILS::remove_referencee_t<decltype(*(str))>>, true>((str)))
 
-#define _KLI_HASH_STR(str) (::kli::hash::force_cx<UINT64, ::kli::hash::hash_fnv1a<UINT64, std::remove_const_t<std::remove_reference_t<decltype(*(str))>>, false>((str))>::value)
-#define _KLI_HASH_STR_TOLOWER(str) (::kli::hash::force_cx<UINT64, ::kli::hash::hash_fnv1a<UINT64, std::remove_const_t<std::remove_reference_t<decltype(*(str))>>, true>((str))>::value)
+#define _KLI_HASH_STR(str) (::kli::hash::force_cx<UINT64, ::kli::hash::hash_fnv1a<UINT64, SKCRYPTUTILS::remove_const_u<SKCRYPTUTILS::remove_referencee_t<decltype(*(str))>>, false>((str))>::value)
+#define _KLI_HASH_STR_TOLOWER(str) (::kli::hash::force_cx<UINT64, ::kli::hash::hash_fnv1a<UINT64, SKCRYPTUTILS::remove_const_u<SKCRYPTUTILS::remove_referencee_t<decltype(*(str))>>, true>((str))>::value)
 
 #ifndef KLI_USE_TOLOWER
 		// Don't use tolower
@@ -303,10 +301,10 @@ namespace kli
 	}
 
 	template <UINT64 ExportHash>
-	KLI_FORCEINLINE uintptr_t find_kernel_export()
+	KLI_FORCEINLINE ULONG_PTR find_kernel_export()
 	{
 		if (!kernel_base)
-			kernel_base = (uintptr_t)ntos_image_base;
+			kernel_base = (ULONG_PTR)ntos_image_base;
 
 		const auto dos_header = (detail::PIMAGE_DOS_HEADER)kernel_base;
 		const auto nt_headers = (detail::PIMAGE_NT_HEADERS64)(kernel_base + dos_header->e_lfanew);
@@ -329,14 +327,14 @@ namespace kli
 			}
 		}
 
-		__debugbreak();
+		DbgBreakPoint();
 		return { };
 	}
 
 	template <UINT64 ExportHash>
-	KLI_FORCEINLINE uintptr_t find_kernel_export_globald()
+	KLI_FORCEINLINE ULONG_PTR find_kernel_export_globald()
 	{
-		static uintptr_t address = 0;
+		static ULONG_PTR address = 0;
 		if (!address)
 			address = find_kernel_export<ExportHash>();
 

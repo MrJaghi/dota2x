@@ -51,8 +51,12 @@
       <WarningLevel>Level3</WarningLevel>
       <TreatWarningAsError>false</TreatWarningAsError>
       <LanguageStandard>stdcpp20</LanguageStandard>
+      <PreprocessorDefinitions>_KERNEL_MODE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <AdditionalIncludeDirectories>SharedMemorySpectre-main;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
     </ClCompile>
+    <DriverSign>
+      <FileDigestAlgorithm>sha256</FileDigestAlgorithm>
+    </DriverSign>
     <Link>
       <TreatLinkerWarningAsErrors>false</TreatLinkerWarningAsErrors>
       <EntryPointSymbol>DriverEntry</EntryPointSymbol>
@@ -64,8 +68,12 @@
       <WarningLevel>Level1</WarningLevel>
       <TreatWarningAsError>false</TreatWarningAsError>
       <BufferSecurityCheck>false</BufferSecurityCheck>
+      <PreprocessorDefinitions>_KERNEL_MODE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <AdditionalIncludeDirectories>SharedMemorySpectre-main;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
     </ClCompile>
+    <DriverSign>
+      <FileDigestAlgorithm>sha256</FileDigestAlgorithm>
+    </DriverSign>
     <Link>
       <TreatLinkerWarningAsErrors>false</TreatLinkerWarningAsErrors>
       <EntryPointSymbol>DriverEntry</EntryPointSymbol>

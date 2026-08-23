@@ -1,6 +1,6 @@
 #pragma once
 #include "Memory.h"
-#include "Math.h"
+#include "VectorMath.h"
 #include "Offsets.h"
 #include "Config.h"
 #include <vector>

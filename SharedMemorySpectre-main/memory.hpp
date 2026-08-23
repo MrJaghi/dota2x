@@ -16,7 +16,7 @@ NTSTATUS ReadProcessMemory(ULONG_PTR CR3 ,HANDLE pid, PVOID Address, PVOID Alloc
 	SIZE_T CurOffset = 0;
 	SIZE_T TotalSize = size;
 	while (TotalSize > 0) {
-		uint64_t CurPhysAddr = TranslateLinearAddress(process_dirbase, (ULONG64)Address + CurOffset);
+		UINT64 CurPhysAddr = TranslateLinearAddress(process_dirbase, (ULONG64)Address + CurOffset);
 		if (!CurPhysAddr) return STATUS_UNSUCCESSFUL;
 
 		ULONG64 ReadSize = min(PAGE_SIZE - (CurPhysAddr & 0xFFF), TotalSize);
@@ -47,7 +47,7 @@ NTSTATUS WriteProcessMemory(ULONG_PTR CR3 ,HANDLE pid, PVOID Address, PVOID Allo
 	SIZE_T TotalSize = size;
 	while (TotalSize)
 	{
-		uint64_t CurPhysAddr = TranslateLinearAddress(process_dirbase, (ULONG64)Address + CurOffset);
+		UINT64 CurPhysAddr = TranslateLinearAddress(process_dirbase, (ULONG64)Address + CurOffset);
 		if (!CurPhysAddr) return STATUS_UNSUCCESSFUL;
 
 		ULONG64 WriteSize = min(PAGE_SIZE - (CurPhysAddr & 0xFFF), TotalSize);
