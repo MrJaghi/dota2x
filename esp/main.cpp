@@ -64,7 +64,19 @@ public:
 				ImGui::SliderFloat("Smoothing", &espSettings.smoothing, 0.0f, 0.9f, "%.2f");
 			}
 		});
+
+		Category assistant;
+		assistant.name = "Last Hit Helper (Read-Only)";
+		assistant.modules.push_back({
+			"Last Hit Indicator", &espSettings.showLastHitHelper,
+			[this]() {
+				ImGui::Checkbox("Show Last Hit Markers", &espSettings.showLastHitHelper);
+				ImGui::TextColored(ImVec4(0.2f, 0.9f, 0.3f, 1.0f), "Mode: 100%% Read-Only Visual Indicator");
+			}
+		});
+
 		menuCategories.push_back(visuals);
+		menuCategories.push_back(assistant);
 	}
 
 	void Run() {
@@ -85,7 +97,7 @@ public:
 
 private:
 	void HandleInput() {
-		bool toggleKeyDown = (GetAsyncKeyState(VK_RSHIFT) & 0x8000) != 0;
+		bool toggleKeyDown = (GetAsyncKeyState(VK_END) & 0x8000) != 0 || (GetAsyncKeyState(VK_RSHIFT) & 0x8000) != 0;
 		if (toggleKeyDown && !toggleKeyWasDown) {
 			menuOpen = !menuOpen;
 			overlay.SetClickable(menuOpen);
@@ -116,12 +128,15 @@ private:
 		lastTargets = EntityReader::CollectTargets(memory, chunks, MaxScanIndex, localPawn, localTeam,
 			localOrigin, viewMatrix, overlay.width, overlay.height, espSettings, smoothedOrigins);
 
+		lastCreeps = EntityReader::CollectCreepTargets(memory, chunks, MaxScanIndex, localPawn, localTeam,
+			localOrigin, viewMatrix, overlay.width, overlay.height);
+
 		DebugLog();
 	}
 
 	void Render() {
 		overlay.BeginFrame();
-		EspRenderer::Draw(espSettings, lastTargets);
+		EspRenderer::Draw(espSettings, lastTargets, lastCreeps);
 		if (menuOpen)
 			UiManager::DrawMenu(menuOpen, menuCategories);
 		overlay.EndFrameAndPresent();
@@ -131,10 +146,11 @@ private:
 		static int debugFrame = 0;
 		debugFrame++;
 		if (debugFrame % 60 == 0)
-			printf("[dbg] targets=%zu smoothed_origins=%zu\n", lastTargets.size(), smoothedOrigins.size());
+			printf("[dbg] targets=%zu creeps=%zu\n", lastTargets.size(), lastCreeps.size());
 	}
 
 	std::vector<EspTarget> lastTargets;
+	std::vector<CreepTarget> lastCreeps;
 };
 
 int main() {

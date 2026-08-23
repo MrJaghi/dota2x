@@ -39,6 +39,10 @@ NTSTATUS main() {
         case op_exit:
             UMalive = false;
             break;
+        case op_unmap:
+            usermode::unmap((PVOID)req->TargetAddress, (SIZE_T)req->Size);
+            UMalive = false;
+            break;
         case op_cr3:
 			game::_cr3();
             break;
@@ -93,13 +97,13 @@ void UnloadDriver(PDRIVER_OBJECT DriverObject) {
 }
 NTSTATUS DriverEntry(PDRIVER_OBJECT DriverObject, PUNICODE_STRING RegistryPath)
 {
-    DriverObject->DriverUnload = UnloadDriver;
+    if (DriverObject && MmIsAddressValid(DriverObject)) {
+        DriverObject->DriverUnload = UnloadDriver;
+    }
 
-    UNREFERENCED_PARAMETER(DriverObject); UNREFERENCED_PARAMETER(RegistryPath);
-	printfx("Driver loaded\n");
-	 
-	 
+    UNREFERENCED_PARAMETER(DriverObject);
+    UNREFERENCED_PARAMETER(RegistryPath);
+    printfx("Driver loaded (Mapped or Normal)\n");
 
-  
     return EP();
 }
