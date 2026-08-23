@@ -185,10 +185,40 @@ namespace usermode {
 
          printfx("Goodbye ! \n");
   
-         MmUnmapLockedPages(kernelMappedAddress, mdl);
-         IoFreeMdl(mdl);
+         if (kernelMappedAddress && mdl) {
+             MmUnmapLockedPages(kernelMappedAddress, mdl);
+             IoFreeMdl(mdl);
+             kernelMappedAddress = NULL;
+             mdl = NULL;
+         }
 
         
+    }
+
+    void unmap(PVOID driverBase = NULL, SIZE_T driverSize = 0) {
+         printfx("[+] Unmapping driver & cleaning resources...\n");
+
+         if (req) {
+             InterlockedExchange(&req->uready, 1);
+         }
+
+         if (kernelMappedAddress && mdl) {
+             MmUnmapLockedPages(kernelMappedAddress, mdl);
+             IoFreeMdl(mdl);
+             kernelMappedAddress = NULL;
+             mdl = NULL;
+         }
+
+         if (driverBase && driverSize > 0 && MmIsAddressValid(driverBase)) {
+             __try {
+                 RtlZeroMemory(driverBase, driverSize);
+             }
+             __except (EXCEPTION_EXECUTE_HANDLER) {
+                 printfx("[-] Exception during driver memory cleanup\n");
+             }
+         }
+
+         printfx("[+] Driver successfully unmapped\n");
     }
 }
 

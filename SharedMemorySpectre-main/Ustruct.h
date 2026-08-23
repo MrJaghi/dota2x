@@ -47,7 +47,8 @@ typedef enum _req_op {
     op_base = 51,
     op_cr3 = 4,
     op_peb = 31,
-	op_exit = 420
+	op_exit = 420,
+	op_unmap = 421
 } req_op;
 //  req instance that will be use in the que 
 typedef struct _req_Obj {
