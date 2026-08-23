@@ -75,6 +75,13 @@
     <ClInclude Include="SharedMemorySpectre-main\bootstrap.h" />
     <ClInclude Include="SharedMemorySpectre-main\callstack.h" />
     <ClInclude Include="SharedMemorySpectre-main\communication.hpp" />
+    <ClInclude Include="SharedMemorySpectre-main\cr3bypass\cr3.h" />
+    <ClInclude Include="SharedMemorySpectre-main\cr3bypass\Helper.h" />
+    <ClInclude Include="SharedMemorySpectre-main\cr3bypass\import.h" />
+    <ClInclude Include="SharedMemorySpectre-main\cr3bypass\imports.h" />
+    <ClInclude Include="SharedMemorySpectre-main\cr3bypass\memory.hpp" />
+    <ClInclude Include="SharedMemorySpectre-main\cr3bypass\read.h" />
+    <ClInclude Include="SharedMemorySpectre-main\cr3bypass\structs.h" />
     <ClInclude Include="SharedMemorySpectre-main\c_xor.h" />
     <ClInclude Include="SharedMemorySpectre-main\driver.h" />
     <ClInclude Include="SharedMemorySpectre-main\encrypt.h" />
@@ -94,6 +101,10 @@
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="SharedMemorySpectre-main\bootstrap.cpp" />
+    <ClCompile Include="SharedMemorySpectre-main\cr3bypass\cr3.cpp" />
+    <ClCompile Include="SharedMemorySpectre-main\cr3bypass\Helper.cpp" />
+    <ClCompile Include="SharedMemorySpectre-main\cr3bypass\read.cpp" />
+    <ClCompile Include="SharedMemorySpectre-main\cr3bypass\structs.cpp" />
     <ClCompile Include="SharedMemorySpectre-main\driver.cpp" />
     <ClCompile Include="SharedMemorySpectre-main\EXPORTS.cpp" />
     <ClCompile Include="SharedMemorySpectre-main\NTOS.cpp" />

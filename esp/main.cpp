@@ -2,6 +2,8 @@
 #define NOMINMAX
 #endif
 
+#include <cmath>
+#include <math.h>
 #include <Windows.h>
 #include <vector>
 #include <string>

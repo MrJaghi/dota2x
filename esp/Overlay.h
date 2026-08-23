@@ -2,12 +2,15 @@
 #ifndef NOMINMAX
 #define NOMINMAX
 #endif
+#include <cmath>
+#include <math.h>
 #include <Windows.h>
 #include <d3d11.h>
 #include <tchar.h>
 #pragma comment(lib, "d3d11.lib")
 
 #include "imgui.h"
+#include "imgui_internal.h"
 #include "imgui_impl_win32.h"
 #include "imgui_impl_dx11.h"
 
