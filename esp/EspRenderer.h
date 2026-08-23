@@ -14,7 +14,7 @@ public:
 		return IM_COL32(r, g, 60, 255);
 	}
 
-	static void Draw(const EspSettings& cfg, const std::vector<EspTarget>& targets) {
+	static void Draw(const EspSettings& cfg, const std::vector<EspTarget>& targets, const std::vector<CreepTarget>& creeps = {}) {
 		if (!cfg.enabled)
 			return;
 
@@ -41,6 +41,27 @@ public:
 
 			if (cfg.showHealthBar && t.maxHealth > 0) {
 				DrawHpText(draw, t, x, y, w, h);
+			}
+		}
+
+		if (cfg.showLastHitHelper) {
+			for (const auto& c : creeps) {
+				if (!c.isKillableNow && !c.isKillableSoon) continue;
+
+				float x = c.x, y = c.y, w = c.w, h = c.h;
+				ImU32 color = c.isKillableNow ? IM_COL32(255, 50, 50, 255) : IM_COL32(255, 200, 0, 255);
+
+				// Draw glowing highlight box around creep
+				draw->AddRect(ImVec2(x - 2, y - 2), ImVec2(x + w + 2, y + h + 2), color, 4.0f, 0, 2.5f);
+
+				// Draw Last Hit marker banner
+				const char* text = c.isKillableNow ? "LAST HIT NOW!" : "ATTACK SOON";
+				ImVec2 textSize = ImGui::CalcTextSize(text);
+				float textX = x + w / 2.0f - textSize.x / 2.0f;
+				float textY = y - textSize.y - 4;
+
+				draw->AddRectFilled(ImVec2(textX - 4, textY - 2), ImVec2(textX + textSize.x + 4, textY + textSize.y + 2), IM_COL32(0, 0, 0, 180), 4.0f);
+				draw->AddText(ImVec2(textX, textY), color, text);
 			}
 		}
 	}

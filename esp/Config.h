@@ -24,6 +24,7 @@ struct EspSettings {
 	bool showNames = true;
 	bool showDistance = true;
 	bool cornerStyle = true;
+	bool showLastHitHelper = true;
 	float boxThickness = 2.2f;
 	float smoothing = 0.35f;
 };
@@ -35,6 +36,17 @@ struct EspTarget {
 	float distance = 0;
 	std::string name;
 	bool enemy = false;
+};
+
+struct CreepTarget {
+	uintptr_t id = 0;
+	float x = 0, y = 0, w = 0, h = 0;
+	int health = 0, maxHealth = 0;
+	float distance = 0;
+	bool isKillableNow = false;
+	bool isKillableSoon = false;
+	float timeToKillable = 0.0f;
+	std::string name;
 };
 
 struct Module {

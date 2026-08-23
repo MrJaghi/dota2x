@@ -188,4 +188,85 @@ public:
 		smoothedOrigins = std::move(newSmoothed);
 		return targets;
 	}
+
+	static std::vector<CreepTarget> CollectCreepTargets(const Memory& mem, const std::vector<uintptr_t>& chunks,
+		int maxScanIndex, uintptr_t localPawn, uint8_t localTeam, const Vector3& localOrigin,
+		const ViewMatrix& viewMatrix, int screenWidth, int screenHeight, float heroDamage = 68.0f,
+		float attackPoint = 0.3f, float projectileSpeed = 1100.0f) {
+
+		std::vector<CreepTarget> creeps;
+
+		for (int i = 1; i <= maxScanIndex; i++) {
+			uintptr_t identity = GetIdentityFromChunks(chunks, i);
+			if (!identity)
+				continue;
+			uintptr_t entity = mem.Read<uintptr_t>(identity + offsets::CGameEntitySystem::m_pInstance);
+			if (!entity || entity == localPawn)
+				continue;
+
+			std::string designerName = GetDesignerName(mem, identity);
+			if (designerName.find("creep") == std::string::npos && designerName.find("building") == std::string::npos)
+				continue;
+
+			uint8_t lifeState = mem.Read<uint8_t>(entity + offsets::C_BaseEntity::m_lifeState);
+			if (lifeState != 0)
+				continue;
+
+			int health = mem.Read<int>(entity + offsets::C_BaseEntity::m_iHealth);
+			int maxHealth = mem.Read<int>(entity + offsets::C_BaseEntity::m_iMaxHealth);
+			if (health <= 0 || maxHealth <= 0)
+				continue;
+
+			uint8_t team = mem.Read<uint8_t>(entity + offsets::C_BaseEntity::m_iTeamNum);
+			if (team == localTeam)
+				continue; // Only enemy creeps for last hit
+
+			Vector3 origin{};
+			if (!GetEntityOrigin(mem, entity, origin))
+				continue;
+
+			Vector3 feet = origin;
+			Vector3 head = origin;
+			head.z += 60.0f;
+
+			Vector2 screenFeet{}, screenHead{};
+			if (!WorldToScreen(feet, screenFeet, viewMatrix, screenWidth, screenHeight))
+				continue;
+			if (!WorldToScreen(head, screenHead, viewMatrix, screenWidth, screenHeight))
+				continue;
+
+			float boxHeight = screenFeet.y - screenHead.y;
+			if (boxHeight <= 0)
+				continue;
+			float boxWidth = boxHeight * 0.6f;
+
+			float dx = origin.x - localOrigin.x;
+			float dy = origin.y - localOrigin.y;
+			float dist = sqrtf(dx * dx + dy * dy);
+
+			float flightTime = (projectileSpeed > 0.0f) ? (dist / projectileSpeed) : 0.0f;
+			float totalDelay = attackPoint + flightTime;
+
+			bool killableNow = (health <= heroDamage);
+			bool killableSoon = (!killableNow && (health <= (heroDamage + 40.0f)));
+
+			CreepTarget c;
+			c.id = entity;
+			c.x = screenHead.x - boxWidth / 2.0f;
+			c.y = screenHead.y;
+			c.w = boxWidth;
+			c.h = boxHeight;
+			c.health = health;
+			c.maxHealth = maxHealth;
+			c.distance = dist;
+			c.isKillableNow = killableNow;
+			c.isKillableSoon = killableSoon;
+			c.timeToKillable = totalDelay;
+			c.name = designerName;
+
+			creeps.push_back(c);
+		}
+
+		return creeps;
+	}
 };
