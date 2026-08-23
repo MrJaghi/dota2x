@@ -7,7 +7,7 @@ PVOID sig;
 _GLOBAL_UEX GLOBAL_UEX;
 _GLOBAL_UEX GLOBAL_UEX2;
  
-NTSTATUS main() {
+NTSTATUS kernel_main() {
     bool UMalive = true;
     const UINT32 pageIndex = KeGetCurrentProcessorIndex();
 	printfx("[+] page index: %d\n", pageIndex);
@@ -87,7 +87,7 @@ NTSTATUS EP() {
     printfx("Start Connection\n");
     if (!NT_SUCCESS(usermode::InitializeCommunication())) { return STATUS_ABANDONED; }
    
- 	return main();
+	return kernel_main();
 
 }
 void UnloadDriver(PDRIVER_OBJECT DriverObject) {

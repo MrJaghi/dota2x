@@ -166,6 +166,7 @@ namespace _lxy_oxor_any_ {
 
 	_lxy__size_t& Y();
 
+#if defined(__TIME__)
 	static constexpr _lxy__size_t base_key = static_cast<_lxy__size_t>(
 		((_lxy__size_t)__TIME__[7] - '0') +
 		((_lxy__size_t)__TIME__[6] - '0') * 10 +
@@ -173,6 +174,9 @@ namespace _lxy_oxor_any_ {
 		((_lxy__size_t)__TIME__[3] - '0') * 600 +
 		((_lxy__size_t)__TIME__[1] - '0') * 3600 +
 		((_lxy__size_t)__TIME__[0] - '0') * 36000);
+#else
+	static constexpr _lxy__size_t base_key = 0x5F3759DF;
+#endif
 
 	template<_lxy__uint32_t s, _lxy__size_t n>
 	class random_constant_32 {
