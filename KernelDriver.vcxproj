@@ -1,0 +1,99 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Project DefaultTargets="Build" ToolsVersion="12.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup Label="ProjectConfigurations">
+    <ProjectConfiguration Include="Debug|x64">
+      <Configuration>Debug</Configuration>
+      <Platform>x64</Platform>
+    </ProjectConfiguration>
+    <ProjectConfiguration Include="Release|x64">
+      <Configuration>Release</Configuration>
+      <Platform>x64</Platform>
+    </ProjectConfiguration>
+  </ItemGroup>
+  <PropertyGroup Label="Globals">
+    <ProjectGuid>{A1B2C3D4-E5F6-7890-1234-56789ABCDEF0}</ProjectGuid>
+    <TemplateGuid>{1bc93793-694f-48fe-9372-81e2b05556fd}</TemplateGuid>
+    <TargetFrameworkVersion>v4.5</TargetFrameworkVersion>
+    <MinimumVisualStudioVersion>12.0</MinimumVisualStudioVersion>
+    <Configuration>Debug</Configuration>
+    <Platform Condition="'$(Platform)' == ''">x64</Platform>
+    <RootNamespace>KernelDriver</RootNamespace>
+    <WindowsTargetPlatformVersion>$(LatestTargetPlatformVersion)</WindowsTargetPlatformVersion>
+  </PropertyGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.Default.props" />
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'" Label="Configuration">
+    <TargetVersion>Windows10</TargetVersion>
+    <UseDebugLibraries>true</UseDebugLibraries>
+    <PlatformToolset>WindowsKernelModeDriver10.0</PlatformToolset>
+    <ConfigurationType>Driver</ConfigurationType>
+    <DriverType>KMDF</DriverType>
+    <DriverTargetPlatform>Universal</DriverTargetPlatform>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'" Label="Configuration">
+    <TargetVersion>Windows10</TargetVersion>
+    <UseDebugLibraries>false</UseDebugLibraries>
+    <PlatformToolset>WindowsKernelModeDriver10.0</PlatformToolset>
+    <ConfigurationType>Driver</ConfigurationType>
+    <DriverType>KMDF</DriverType>
+    <DriverTargetPlatform>Universal</DriverTargetPlatform>
+    <Driver_SpectreMitigation>Spectre</Driver_SpectreMitigation>
+    <CharacterSet>MultiByte</CharacterSet>
+  </PropertyGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.props" />
+  <ImportGroup Label="ExtensionSettings" />
+  <ImportGroup Label="PropertySheets">
+    <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
+  </ImportGroup>
+  <PropertyGroup Label="UserMacros" />
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
+    <ClCompile>
+      <WarningLevel>Level3</WarningLevel>
+      <LanguageStandard>stdcpp17</LanguageStandard>
+      <AdditionalIncludeDirectories>SharedMemorySpectre-main;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+    </ClCompile>
+    <Link>
+      <EntryPointSymbol>DriverEntry</EntryPointSymbol>
+    </Link>
+  </ItemDefinitionGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
+    <ClCompile>
+      <LanguageStandard>stdcpp20</LanguageStandard>
+      <WarningLevel>Level1</WarningLevel>
+      <BufferSecurityCheck>false</BufferSecurityCheck>
+      <AdditionalIncludeDirectories>SharedMemorySpectre-main;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+    </ClCompile>
+    <Link>
+      <EntryPointSymbol>DriverEntry</EntryPointSymbol>
+    </Link>
+  </ItemDefinitionGroup>
+  <ItemGroup>
+    <ClInclude Include="SharedMemorySpectre-main\bootstrap.h" />
+    <ClInclude Include="SharedMemorySpectre-main\callstack.h" />
+    <ClInclude Include="SharedMemorySpectre-main\communication.hpp" />
+    <ClInclude Include="SharedMemorySpectre-main\c_xor.h" />
+    <ClInclude Include="SharedMemorySpectre-main\driver.h" />
+    <ClInclude Include="SharedMemorySpectre-main\encrypt.h" />
+    <ClInclude Include="SharedMemorySpectre-main\EXPORTS.h" />
+    <ClInclude Include="SharedMemorySpectre-main\globals.h" />
+    <ClInclude Include="SharedMemorySpectre-main\ia32.h" />
+    <ClInclude Include="SharedMemorySpectre-main\imports.h" />
+    <ClInclude Include="SharedMemorySpectre-main\includes.h" />
+    <ClInclude Include="SharedMemorySpectre-main\key.h" />
+    <ClInclude Include="SharedMemorySpectre-main\memory.hpp" />
+    <ClInclude Include="SharedMemorySpectre-main\memoryhelper.hpp" />
+    <ClInclude Include="SharedMemorySpectre-main\NTOS.h" />
+    <ClInclude Include="SharedMemorySpectre-main\oxorany.h" />
+    <ClInclude Include="SharedMemorySpectre-main\oxorany_include.h" />
+    <ClInclude Include="SharedMemorySpectre-main\registry.hpp" />
+    <ClInclude Include="SharedMemorySpectre-main\Ustruct.h" />
+  </ItemGroup>
+  <ItemGroup>
+    <ClCompile Include="SharedMemorySpectre-main\bootstrap.cpp" />
+    <ClCompile Include="SharedMemorySpectre-main\driver.cpp" />
+    <ClCompile Include="SharedMemorySpectre-main\EXPORTS.cpp" />
+    <ClCompile Include="SharedMemorySpectre-main\NTOS.cpp" />
+    <ClCompile Include="SharedMemorySpectre-main\oxorany.cpp" />
+  </ItemGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
+  <ImportGroup Label="ExtensionTargets" />
+</Project>

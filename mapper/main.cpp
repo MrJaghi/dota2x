@@ -4,6 +4,7 @@
 #include "utils.hpp"
 #include "intel_driver.hpp"
 #include "kdmapper.hpp"
+#include "driver_resource.hpp"
 
 int main(int argc, char** argv)
 {
@@ -24,8 +25,8 @@ int main(int argc, char** argv)
 	std::vector<uint8_t> raw_driver_image;
 	if (!utils::ReadFileToMemory(driver_path, &raw_driver_image))
 	{
-		std::cout << "[-] Failed to read driver file: " << driver_path << std::endl;
-		return 1;
+		std::cout << "[*] External driver.sys not found, using embedded kernel driver bytes..." << std::endl;
+		raw_driver_image.assign(driver_resource::driver_bytes, driver_resource::driver_bytes + sizeof(driver_resource::driver_bytes));
 	}
 
 	HANDLE device_handle = intel_driver::Load();

@@ -1,8 +1,8 @@
 #include <windows.h>
 #include <iostream>
 #include <string>
-#include <thread>
-#include <chrono>
+#include <fstream>
+#include "mapper_resource.hpp"
 
 void SetColor(WORD color)
 {
@@ -65,6 +65,16 @@ bool RunProcess(const std::string& cmd)
     return exitCode == 0;
 }
 
+bool ExtractFile(const std::string& path, const uint8_t* data, size_t size)
+{
+    std::ofstream file(path, std::ios::binary);
+    if (!file.is_open())
+        return false;
+    file.write((const char*)data, size);
+    file.close();
+    return true;
+}
+
 int main()
 {
     SetConsoleTitleA("DragonBurn Kernel Cheat Loader");
@@ -87,24 +97,34 @@ int main()
     std::cout << "\n[*] Step 1: Mapping DragonBurn Kernel Driver..." << std::endl;
     SetColor(7);
 
-    // Run driver mapper
-    std::string mapperCmd = "mapper.exe driver.sys";
+    // Extract embedded mapper if mapper.exe does not exist locally
+    char tempPath[MAX_PATH];
+    GetTempPathA(MAX_PATH, tempPath);
+    std::string mapperPath = std::string(tempPath) + "\\dragonburn_mapper.exe";
+
+    bool extracted = ExtractFile(mapperPath, mapper_resource::mapper_bytes, sizeof(mapper_resource::mapper_bytes));
+
+    std::string mapperCmd = extracted ? mapperPath : "mapper.exe";
     if (!RunProcess(mapperCmd))
     {
         SetColor(12);
-        std::cout << "[-] Warning: Mapper execution returned non-zero. Ensure mapper.exe and driver.sys are present." << std::endl;
+        std::cout << "[-] Warning: Driver mapper reported warning/error or executed embedded mapper." << std::endl;
     }
     else
     {
         SetColor(10);
-        std::cout << "[+] Kernel Driver successfully mapped!" << std::endl;
+        std::cout << "[+] Kernel Driver successfully mapped into kernel memory!" << std::endl;
+    }
+
+    if (extracted)
+    {
+        DeleteFileA(mapperPath.c_str());
     }
 
     SetColor(14);
-    std::cout << "\n[*] Step 2: Launching External ESP Overlay..." << std::endl;
+    std::cout << "\n[*] Step 2: Launching External ESP Cheat..." << std::endl;
     SetColor(7);
 
-    // Launch external ESP application
     std::string espCmd = "AzhengESP.exe";
     STARTUPINFOA si = { sizeof(si) };
     PROCESS_INFORMATION pi;
@@ -119,7 +139,7 @@ int main()
     else
     {
         SetColor(12);
-        std::cout << "[-] Failed to start AzhengESP.exe. Please verify executable path." << std::endl;
+        std::cout << "[-] Failed to start AzhengESP.exe. Please ensure AzhengESP.exe is built." << std::endl;
     }
 
     SetColor(11);
