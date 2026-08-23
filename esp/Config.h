@@ -21,6 +21,10 @@ struct EspSettings {
 	bool showEnemies = true;
 	bool showAllies = true;
 	bool showHealthBar = true;
+	bool showManaBar = true;
+	bool showHeroLevel = true;
+	bool showIllusions = true;
+	bool showUltStatus = true;
 	bool showNames = true;
 	bool showDistance = true;
 	bool cornerStyle = true;
@@ -33,9 +37,13 @@ struct EspTarget {
 	uintptr_t id = 0;
 	float x = 0, y = 0, w = 0, h = 0;
 	int health = 0, maxHealth = 0;
+	int mana = 0, maxMana = 0;
+	int level = 1;
 	float distance = 0;
 	std::string name;
 	bool enemy = false;
+	bool isIllusion = false;
+	bool ultReady = true;
 };
 
 struct CreepTarget {

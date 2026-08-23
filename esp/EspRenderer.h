@@ -14,6 +14,10 @@ public:
 		return IM_COL32(r, g, 60, 255);
 	}
 
+	static ImU32 ManaColor() {
+		return IM_COL32(60, 140, 240, 255);
+	}
+
 	static void Draw(const EspSettings& cfg, const std::vector<EspTarget>& targets, const std::vector<CreepTarget>& creeps = {}) {
 		if (!cfg.enabled)
 			return;
@@ -24,7 +28,7 @@ public:
 			if (t.enemy && !cfg.showEnemies) continue;
 			if (!t.enemy && !cfg.showAllies) continue;
 
-			ImU32 accent = t.enemy ? IM_COL32(235, 64, 52, 255) : IM_COL32(60, 200, 120, 255);
+			ImU32 accent = t.isIllusion ? IM_COL32(0, 180, 255, 255) : (t.enemy ? IM_COL32(235, 64, 52, 255) : IM_COL32(60, 200, 120, 255));
 			float x = t.x, y = t.y, w = t.w, h = t.h;
 
 			if (cfg.cornerStyle) {
@@ -33,8 +37,31 @@ public:
 				draw->AddRect(ImVec2(x, y), ImVec2(x + w, y + h), accent, 3.0f, 0, cfg.boxThickness);
 			}
 
+			// Draw Illusion badge
+			if (cfg.showIllusions && t.isIllusion) {
+				const char* illText = "[ILLUSION]";
+				ImVec2 illSize = ImGui::CalcTextSize(illText);
+				float illX = x + w / 2.0f - illSize.x / 2.0f;
+				draw->AddRectFilled(ImVec2(illX - 4, y - illSize.y - 18), ImVec2(illX + illSize.x + 4, y - 16), IM_COL32(0, 120, 220, 200), 3.0f);
+				draw->AddText(ImVec2(illX, y - illSize.y - 18), IM_COL32(255, 255, 255, 255), illText);
+			}
+
+			// Draw Hero Level Badge
+			if (cfg.showHeroLevel && t.level > 0) {
+				char lvlBuf[16];
+				snprintf(lvlBuf, sizeof(lvlBuf), "L%d", t.level);
+				draw->AddCircleFilled(ImVec2(x - 14, y + 10), 9.0f, IM_COL32(35, 35, 45, 220));
+				draw->AddCircle(ImVec2(x - 14, y + 10), 9.0f, IM_COL32(255, 215, 0, 255), 0, 1.5f);
+				ImVec2 lvlSize = ImGui::CalcTextSize(lvlBuf);
+				draw->AddText(ImVec2(x - 14 - lvlSize.x / 2.0f, y + 10 - lvlSize.y / 2.0f), IM_COL32(255, 255, 255, 255), lvlBuf);
+			}
+
 			if (cfg.showHealthBar && t.maxHealth > 0) {
 				DrawHealthBar(draw, t, x, y, h);
+			}
+
+			if (cfg.showManaBar && t.maxMana > 0) {
+				DrawManaBar(draw, t, x, y, h);
 			}
 
 			DrawLabel(draw, t, cfg, x, y, w, h);
@@ -51,10 +78,8 @@ public:
 				float x = c.x, y = c.y, w = c.w, h = c.h;
 				ImU32 color = c.isKillableNow ? IM_COL32(255, 50, 50, 255) : IM_COL32(255, 200, 0, 255);
 
-				// Draw glowing highlight box around creep
 				draw->AddRect(ImVec2(x - 2, y - 2), ImVec2(x + w + 2, y + h + 2), color, 4.0f, 0, 2.5f);
 
-				// Draw Last Hit marker banner
 				const char* text = c.isKillableNow ? "LAST HIT NOW!" : "ATTACK SOON";
 				ImVec2 textSize = ImGui::CalcTextSize(text);
 				float textX = x + w / 2.0f - textSize.x / 2.0f;
@@ -88,10 +113,20 @@ private:
 		float pct = (float)t.health / (float)t.maxHealth;
 		if (pct < 0) pct = 0; if (pct > 1) pct = 1;
 
-		float barX = x - 10, barW = 5.0f;
-		draw->AddRectFilled(ImVec2(barX, y), ImVec2(barX + barW, y + h), IM_COL32(30, 30, 34, 160), 2.5f);
+		float barX = x - 8, barW = 4.0f;
+		draw->AddRectFilled(ImVec2(barX, y), ImVec2(barX + barW, y + h), IM_COL32(30, 30, 34, 160), 2.0f);
 		float filledH = h * pct;
-		draw->AddRectFilled(ImVec2(barX, y + (h - filledH)), ImVec2(barX + barW, y + h), HealthColor(pct), 2.5f);
+		draw->AddRectFilled(ImVec2(barX, y + (h - filledH)), ImVec2(barX + barW, y + h), HealthColor(pct), 2.0f);
+	}
+
+	static void DrawManaBar(ImDrawList* draw, const EspTarget& t, float x, float y, float h) {
+		float pct = (float)t.mana / (float)t.maxMana;
+		if (pct < 0) pct = 0; if (pct > 1) pct = 1;
+
+		float barX = x - 14, barW = 3.5f;
+		draw->AddRectFilled(ImVec2(barX, y), ImVec2(barX + barW, y + h), IM_COL32(30, 30, 34, 160), 2.0f);
+		float filledH = h * pct;
+		draw->AddRectFilled(ImVec2(barX, y + (h - filledH)), ImVec2(barX + barW, y + h), ManaColor(), 2.0f);
 	}
 
 	static void DrawLabel(ImDrawList* draw, const EspTarget& t, const EspSettings& cfg, float x, float y, float w, float h) {

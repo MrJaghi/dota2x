@@ -57,6 +57,9 @@ public:
 				ImGui::Checkbox("Show enemies", &espSettings.showEnemies);
 				ImGui::Checkbox("Show allies", &espSettings.showAllies);
 				ImGui::Checkbox("Health bar", &espSettings.showHealthBar);
+				ImGui::Checkbox("Mana bar", &espSettings.showManaBar);
+				ImGui::Checkbox("Hero level", &espSettings.showHeroLevel);
+				ImGui::Checkbox("Detect illusions", &espSettings.showIllusions);
 				ImGui::Checkbox("Names", &espSettings.showNames);
 				ImGui::Checkbox("Distance", &espSettings.showDistance);
 				ImGui::Checkbox("Corner style", &espSettings.cornerStyle);
@@ -71,7 +74,7 @@ public:
 			"Last Hit Indicator", &espSettings.showLastHitHelper,
 			[this]() {
 				ImGui::Checkbox("Show Last Hit Markers", &espSettings.showLastHitHelper);
-				ImGui::TextColored(ImVec4(0.2f, 0.9f, 0.3f, 1.0f), "Mode: 100%% Read-Only Visual Indicator");
+				ImGui::TextColored(ImVec4(0.2f, 0.9f, 0.3f, 1.0f), "Mode: 100%% Read-Only Visual Overlay");
 			}
 		});
 

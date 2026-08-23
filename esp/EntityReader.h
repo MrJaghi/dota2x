@@ -12,6 +12,12 @@ namespace offsets {
 		constexpr std::ptrdiff_t m_hPawn = 0x6A4;
 		constexpr std::ptrdiff_t m_bIsLocalPlayerController = 0x770;
 	}
+	namespace CDOTABaseNPC {
+		constexpr std::ptrdiff_t m_flMana = 0x228;
+		constexpr std::ptrdiff_t m_flMaxMana = 0x22C;
+		constexpr std::ptrdiff_t m_iCurrentLevel = 0x208;
+		constexpr std::ptrdiff_t m_bIsIllusion = 0x828;
+	}
 }
 
 class EntityReader {
@@ -131,6 +137,11 @@ public:
 
 			uint8_t team = mem.Read<uint8_t>(entity + offsets::C_BaseEntity::m_iTeamNum);
 
+			float mana = mem.Read<float>(entity + offsets::CDOTABaseNPC::m_flMana);
+			float maxMana = mem.Read<float>(entity + offsets::CDOTABaseNPC::m_flMaxMana);
+			int level = mem.Read<int>(entity + offsets::CDOTABaseNPC::m_iCurrentLevel);
+			bool isIllusion = mem.Read<uint8_t>(entity + offsets::CDOTABaseNPC::m_bIsIllusion) != 0;
+
 			Vector3 origin{};
 			if (!GetEntityOrigin(mem, entity, origin))
 				continue;
@@ -178,8 +189,12 @@ public:
 			t.h = boxHeight;
 			t.health = health;
 			t.maxHealth = maxHealth;
+			t.mana = (int)mana;
+			t.maxMana = (int)(maxMana > 0 ? maxMana : 100.0f);
+			t.level = (level > 0 && level <= 30) ? level : 1;
 			t.distance = sqrtf(dx * dx + dy * dy);
 			t.enemy = (team != localTeam);
+			t.isIllusion = isIllusion;
 			t.name = FormatHeroName(designerName);
 
 			targets.push_back(t);
@@ -219,7 +234,7 @@ public:
 
 			uint8_t team = mem.Read<uint8_t>(entity + offsets::C_BaseEntity::m_iTeamNum);
 			if (team == localTeam)
-				continue; // Only enemy creeps for last hit
+				continue;
 
 			Vector3 origin{};
 			if (!GetEntityOrigin(mem, entity, origin))
