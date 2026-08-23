@@ -1,7 +1,9 @@
 #pragma once
-#include <cstdint>
 #include <cmath>
+#include <cstdlib>
 #include <math.h>
+#include <stdlib.h>
+#include <cstdint>
 
 struct Vector3 {
 	float x = 0, y = 0, z = 0;

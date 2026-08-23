@@ -1,9 +1,12 @@
+#include <cmath>
+#include <cstdlib>
+#include <math.h>
+#include <stdlib.h>
+
 #ifndef NOMINMAX
 #define NOMINMAX
 #endif
 
-#include <cmath>
-#include <math.h>
 #include <Windows.h>
 #include <vector>
 #include <string>
