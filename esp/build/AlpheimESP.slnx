@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Solution>
+	<Configurations>
+		<BuildType Name="Debug"/>
+		<BuildType Name="Release"/>
+		<BuildType Name="MinSizeRel"/>
+		<BuildType Name="RelWithDebInfo"/>
+		<Platform Name="x64"/>
+	</Configurations>
+	<Project Path="ALL_BUILD.vcxproj" Type="8bc9ceb8-8b4a-11d0-8d11-00a0c91bc942" Id="8d1d366d-992f-325d-a67c-a108758c03e7" DefaultStartup="true">
+		<BuildDependency Project="AlpheimESP.vcxproj"/>
+		<BuildDependency Project="AlpheimInjector.vcxproj"/>
+		<BuildDependency Project="AlpheimInternal.vcxproj"/>
+		<BuildDependency Project="ZERO_CHECK.vcxproj"/>
+		<Build Solution="Debug|*" Project="false"/>
+		<Build Solution="Release|*" Project="false"/>
+		<Build Solution="MinSizeRel|*" Project="false"/>
+		<Build Solution="RelWithDebInfo|*" Project="false"/>
+	</Project>
+	<Project Path="AlpheimESP.vcxproj" Type="8bc9ceb8-8b4a-11d0-8d11-00a0c91bc942" Id="e6826202-bdc3-3799-8f8e-394e0ee4538a">
+		<BuildDependency Project="ZERO_CHECK.vcxproj"/>
+	</Project>
+	<Project Path="AlpheimInjector.vcxproj" Type="8bc9ceb8-8b4a-11d0-8d11-00a0c91bc942" Id="9718673f-9c48-3fa3-8328-fce58e8a6568">
+		<BuildDependency Project="ZERO_CHECK.vcxproj"/>
+	</Project>
+	<Project Path="AlpheimInternal.vcxproj" Type="8bc9ceb8-8b4a-11d0-8d11-00a0c91bc942" Id="508da82f-c849-32e0-bd75-68f1d84b8bdc">
+		<BuildDependency Project="ZERO_CHECK.vcxproj"/>
+	</Project>
+	<Project Path="ZERO_CHECK.vcxproj" Type="8bc9ceb8-8b4a-11d0-8d11-00a0c91bc942" Id="ca535c76-eaab-343c-903b-17632d40ed92"/>
+</Solution>

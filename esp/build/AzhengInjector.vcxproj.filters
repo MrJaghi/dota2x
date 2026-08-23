@@ -1,0 +1,16 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="18.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup>
+    <ClCompile Include="C:\Users\protect\Desktop\main\projects\Alpheim Dota2\esp\internal\Injector.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+  </ItemGroup>
+  <ItemGroup>
+    <CustomBuild Include="C:\Users\protect\Desktop\main\projects\Alpheim Dota2\esp\CMakeLists.txt" />
+  </ItemGroup>
+  <ItemGroup>
+    <Filter Include="Source Files">
+      <UniqueIdentifier>{97F0FFF7-F3BC-3FC3-9D18-E259371E04D3}</UniqueIdentifier>
+    </Filter>
+  </ItemGroup>
+</Project>
