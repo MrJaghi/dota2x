@@ -105,7 +105,7 @@ public:
 
 		ImGui::Spacing();
 		ImGui::Separator();
-		ImGui::TextDisabled(" [END] / [RIGHT SHIFT] - Toggle Menu Overlay");
+		ImGui::TextDisabled(" [INSERT] - Toggle Menu  (menu only works while Dota 2 is focused)");
 
 		ImGui::End();
 	}

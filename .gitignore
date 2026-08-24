@@ -1,0 +1,17 @@
+# Build outputs
+x64/
+Debug/
+Release/
+*.ipch
+*.sdf
+*.suo
+*.user
+*.VC.db
+*.VC.opendb
+.vs/
+
+# Don't commit the real vulnerable Intel driver binary (signed, copyrighted)
+bin/iqvw64e.sys
+
+# Temp extracted payloads
+*.log

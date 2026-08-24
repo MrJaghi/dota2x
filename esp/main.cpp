@@ -13,6 +13,8 @@
 #include "Memory.h"
 #include "VectorMath.h"
 #include "Offsets.h"
+#include "OffsetLoader.h"
+#include "OffsetValidator.h"
 #include "Overlay.h"
 #include "Config.h"
 #include "EntityReader.h"
@@ -29,8 +31,12 @@ private:
 	bool toggleKeyWasDown = false;
 	std::unordered_map<uintptr_t, Vector3> smoothedOrigins;
 
-	static constexpr int ChunkCount = 16;
-	static constexpr int MaxScanIndex = ChunkCount * offsets::CGameEntitySystem::ChunkSize;
+	// Entity-list chunk count / slot size. ChunkSize is always 512 for Source2
+	// (the dumper doesn't dump it); 16 chunks * 512 slots = 8192 entities,
+	// comfortably higher than Dota 2's max entity index.
+	static constexpr int ChunkSize    = 512;
+	static constexpr int ChunkCount   = 16;
+	static constexpr int MaxScanIndex = ChunkCount * ChunkSize;
 
 public:
 	bool Initialize() {
@@ -43,6 +49,13 @@ public:
 		while (!overlay.Create(L"Dota 2"))
 			Sleep(1000);
 		printf("[+] Overlay created (%dx%d)\n", overlay.width, overlay.height);
+
+		// Load any offset overrides from <exe_dir>\output\*.hpp (and .ini fallback).
+		OffsetLoader::LoadFromFile();
+
+		// Validate offsets against the live client.dll so we get a console
+		// warning instead of silent garbage when the game updates.
+		OffsetValidator::ValidateAll(memory);
 
 		SetupUI();
 		return true;
@@ -85,15 +98,32 @@ public:
 	}
 
 	void Run() {
+		bool wasFocused = true;
 		while (memory.IsProcessAlive()) {
 			overlay.PumpMessages();
 			overlay.SyncWithGameWindow();
 
+			bool focused = overlay.IsGameFocused();
 			HandleInput();
-			Update();
-			Render();
 
-			Sleep(4);
+			if (focused) {
+				Update();
+				Render();
+			} else {
+				// When Alt+Tabbed, clear stale targets so we don't keep drawing the
+				// last frame when returning focus (and save CPU/GPU).
+				lastTargets.clear();
+				lastCreeps.clear();
+				if (wasFocused) {
+					// Blank the overlay once on unfocus to clear the last frame.
+					overlay.BeginFrame();
+					overlay.EndFrameAndPresent();
+				}
+				Sleep(33); // ~30 fps polling while tabbed out
+			}
+			wasFocused = focused;
+
+			if (focused) Sleep(4);
 		}
 
 		overlay.Shutdown();
@@ -102,12 +132,23 @@ public:
 
 private:
 	void HandleInput() {
-		bool toggleKeyDown = (GetAsyncKeyState(VK_END) & 0x8000) != 0 || (GetAsyncKeyState(VK_RSHIFT) & 0x8000) != 0;
+		// Menu toggle: INSERT only, and ONLY while Dota 2 has keyboard focus so
+		// pressing Insert in the browser / Discord / chat does not open the menu.
+		bool gameFocused = overlay.IsGameFocused();
+		bool toggleKeyDown = false;
+		if (gameFocused)
+			toggleKeyDown = (GetAsyncKeyState(VK_INSERT) & 0x8000) != 0;
 		if (toggleKeyDown && !toggleKeyWasDown) {
 			menuOpen = !menuOpen;
 			overlay.SetClickable(menuOpen);
 		}
 		toggleKeyWasDown = toggleKeyDown;
+
+		// Auto-close the menu and release clicks if the user Alt+Tabs out.
+		if (menuOpen && !gameFocused) {
+			menuOpen = false;
+			overlay.SetClickable(false);
+		}
 	}
 
 	void Update() {
@@ -130,39 +171,39 @@ private:
 
 		ViewMatrix viewMatrix = memory.Read<ViewMatrix>(memory.clientDllBase + offsets::client_dll::dwViewMatrix);
 
+		// 64 units ~= 1 Dota 2 "hammer" / roughly 1 meter. Divide by 60
+		// (~64/1.06) to approximate in-game meters; that's a reasonable
+		// estimate for hero bounding boxes. See t.distance usage in
+		// EspRenderer (we render it raw; divide there to keep the raw
+		// value available).
 		lastTargets = EntityReader::CollectTargets(memory, chunks, MaxScanIndex, localPawn, localTeam,
 			localOrigin, viewMatrix, overlay.width, overlay.height, espSettings, smoothedOrigins);
 
 		lastCreeps = EntityReader::CollectCreepTargets(memory, chunks, MaxScanIndex, localPawn, localTeam,
 			localOrigin, viewMatrix, overlay.width, overlay.height);
-
-		DebugLog();
-	}
-
-	void Render() {
-		overlay.BeginFrame();
-		EspRenderer::Draw(espSettings, lastTargets, lastCreeps);
-		if (menuOpen)
-			UiManager::DrawMenu(menuOpen, menuCategories);
-		overlay.EndFrameAndPresent();
-	}
-
-	void DebugLog() {
-		static int debugFrame = 0;
-		debugFrame++;
-		if (debugFrame % 60 == 0)
-			printf("[dbg] targets=%zu creeps=%zu\n", lastTargets.size(), lastCreeps.size());
 	}
 
 	std::vector<EspTarget> lastTargets;
 	std::vector<CreepTarget> lastCreeps;
 };
 
-int main() {
-	GameClient client;
-	if (!client.Initialize())
-		return 1;
+	int main() {
+		SetConsoleTitleA("DragonBurn External ESP");
+		printf("[*] DragonBurn External ESP -- waiting for Dota 2 process...\n");
 
-	client.Run();
-	return 0;
-}
+		GameClient client;
+		// Run forever: if Dota 2 closes, detach, wait, re-attach.
+		// This means the user can close Dota and re-open it without
+		// restarting the ESP.
+		while (true) {
+			if (!client.Initialize()) {
+				printf("[!] Initialization failed -- retrying in 5s.\n");
+				Sleep(5000);
+				continue;
+			}
+			client.Run();
+			printf("[*] Dota 2 closed. Waiting for restart...\n");
+			Sleep(3000);
+		}
+		return 0;
+	}

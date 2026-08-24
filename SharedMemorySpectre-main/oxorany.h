@@ -29,7 +29,7 @@ SOFTWARE.
 #ifndef OXORANY_H
 #define OXORANY_H
 
-#if _KERNEL_MODE
+#if defined(KERNEL_MODE)
 #include <ntddk.h>
 typedef UINT8 _lxy__uint8_t;
 typedef UINT32 _lxy__uint32_t;

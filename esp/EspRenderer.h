@@ -132,8 +132,10 @@ private:
 	static void DrawLabel(ImDrawList* draw, const EspTarget& t, const EspSettings& cfg, float x, float y, float w, float h) {
 		std::string label = cfg.showNames ? t.name : "";
 		if (cfg.showDistance && t.distance > 0) {
+			// Source2 uses ~1 unit = ~1 inch; 1 meter ≈ 39.37 units.
+			// We print integer meters to keep labels short.
 			char buf[32];
-			snprintf(buf, sizeof(buf), "  %.0fm", t.distance / 60.0f);
+			snprintf(buf, sizeof(buf), "  %.0fm", t.distance / 39.37f);
 			label += buf;
 		}
 

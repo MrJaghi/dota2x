@@ -59,7 +59,7 @@ namespace portable_executable
 		return true;
 	}
 
-	bool ResolveImports(HANDLE device_handle, void* local_image, PIMAGE_NT_HEADERS nt_headers)
+	bool ResolveImports(HANDLE /*device_handle*/, void* local_image, PIMAGE_NT_HEADERS nt_headers)
 	{
 		PIMAGE_DATA_DIRECTORY import_dir = &nt_headers->OptionalHeader.DataDirectory[IMAGE_DIRECTORY_ENTRY_IMPORT];
 		if (!import_dir->Size)
@@ -71,16 +71,17 @@ namespace portable_executable
 		{
 			const char* module_name = (const char*)((uint64_t)local_image + import_desc->Name);
 			uint64_t kernel_module_base = utils::GetKernelModuleAddress(module_name);
-
 			if (!kernel_module_base)
 			{
+				// Some imports (like "ntoskrnl.exe") might be spelled with different
+				// case; utils::GetKernelModuleAddress already does case-insensitive
+				// compare, so if we fail here the module truly isn't loaded.
 				std::cout << "[-] Failed to get kernel module: " << module_name << std::endl;
 				return false;
 			}
 
 			PIMAGE_THUNK_DATA thunk = (PIMAGE_THUNK_DATA)((uint64_t)local_image + import_desc->FirstThunk);
 			PIMAGE_THUNK_DATA original_thunk = (PIMAGE_THUNK_DATA)((uint64_t)local_image + import_desc->OriginalFirstThunk);
-
 			if (!original_thunk)
 				original_thunk = thunk;
 
@@ -95,15 +96,17 @@ namespace portable_executable
 				PIMAGE_IMPORT_BY_NAME import_by_name = (PIMAGE_IMPORT_BY_NAME)((uint64_t)local_image + original_thunk->u1.AddressOfData);
 				std::string func_name = (const char*)import_by_name->Name;
 
-				uint64_t func_address = utils::GetKernelModuleExport(kernel_module_base, func_name);
+				// Resolve against the dependency module first, then fall back to ntoskrnl.
+				uint64_t func_address = intel_driver::GetKernelModuleExport(kernel_module_base, func_name);
+				if (!func_address && kernel_module_base != intel_driver::g_ntoskrnlAddr)
+					func_address = intel_driver::GetKernelModuleExport(intel_driver::g_ntoskrnlAddr, func_name);
 				if (!func_address)
 				{
-					std::cout << "[-] Failed to resolve import: " << func_name << std::endl;
+					std::cout << "[-] Failed to resolve import: " << func_name << " (" << module_name << ")" << std::endl;
 					return false;
 				}
 
 				thunk->u1.Function = func_address;
-
 				++thunk;
 				++original_thunk;
 			}

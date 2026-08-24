@@ -1,5 +1,5 @@
 #pragma once
-#ifdef _KERNEL_MODE
+#ifdef KERNEL_MODE
 #include <ntddk.h>
 #include <ntdef.h>
 #else
@@ -74,7 +74,7 @@ namespace CallSpooferTraits
 
 #pragma optimize("", off)
 #define SPOOF_FUNC CallSpoofer::SpoofFunction spoof(_AddressOfReturnAddress());
-#ifdef _KERNEL_MODE
+#ifdef KERNEL_MODE
 #define SPOOF_CALL(ret_type,name) (CallSpoofer::SafeCall<ret_type, CallSpooferTraits::remove_reference_t<decltype(*name)>>(name))
 #else
 #define SPOOF_CALL(name) (CallSpoofer::SafeCall(name))
@@ -86,7 +86,7 @@ namespace CallSpooferTraits
 
 namespace CallSpoofer
 {
-#ifndef _KERNEL_MODE
+#ifndef KERNEL_MODE
 	using namespace std;
 #endif
 }
@@ -116,7 +116,7 @@ namespace CallSpoofer
 		}
 	};
 
-#ifdef _KERNEL_MODE
+#ifdef KERNEL_MODE
 	__forceinline PVOID LocateShellCode(PVOID func, SIZE_T size = 500)
 	{
 		void* addr = ExAllocatePoolWithTag(NonPagedPool, size, 'CpSC');
@@ -134,7 +134,7 @@ namespace CallSpoofer
 	}
 #endif
 
-#ifdef _KERNEL_MODE
+#ifdef KERNEL_MODE
 	template <typename RetType, typename Func, typename ...Args>
 	RetType
 #else
@@ -143,7 +143,7 @@ namespace CallSpoofer
 #endif
 		__declspec(safebuffers)ShellCodeGenerator(Func f, Args&... args)
 	{
-#ifdef _KERNEL_MODE
+#ifdef KERNEL_MODE
 		using this_func_type = decltype(ShellCodeGenerator<RetType, Func, Args&...>);
 		using return_type = RetType;
 #else
@@ -173,7 +173,7 @@ namespace CallSpoofer
 
 
 
-#ifdef _KERNEL_MODE
+#ifdef KERNEL_MODE
 	template<typename RetType, class Func>
 #else
 	template<class Func >
@@ -192,7 +192,7 @@ namespace CallSpoofer
 		{
 			SPOOF_FUNC;
 
-#ifdef _KERNEL_MODE
+#ifdef KERNEL_MODE
 			using return_type = RetType;
 			using p_shell_code_generator_type = decltype(&ShellCodeGenerator<RetType, Func*, Args...>);
 			PVOID self_addr = static_cast<PVOID>(&ShellCodeGenerator<RetType, Func*, Args&&...>);
@@ -213,7 +213,7 @@ namespace CallSpoofer
 			{
 				if (orig_generator[index] == self_addr)
 				{
-#ifdef _KERNEL_MODE
+#ifdef KERNEL_MODE
 					//DbgPrint("Found allocated generator");
 #else
 					//std::cout << "Found allocated generator" << std::endl;
@@ -227,7 +227,7 @@ namespace CallSpoofer
 
 			if (!p_shellcode)
 			{
-#ifdef _KERNEL_MODE
+#ifdef KERNEL_MODE
 				//DbgPrint("Alloc generator");
 #else	
 				//std::cout << "Alloc generator" << std::endl;

@@ -6,19 +6,9 @@
 #include <vector>
 #include <string>
 #include <cmath>
-
-namespace offsets {
-	namespace CBasePlayerController {
-		constexpr std::ptrdiff_t m_hPawn = 0x6A4;
-		constexpr std::ptrdiff_t m_bIsLocalPlayerController = 0x770;
-	}
-	namespace CDOTABaseNPC {
-		constexpr std::ptrdiff_t m_flMana = 0x228;
-		constexpr std::ptrdiff_t m_flMaxMana = 0x22C;
-		constexpr std::ptrdiff_t m_iCurrentLevel = 0x208;
-		constexpr std::ptrdiff_t m_bIsIllusion = 0x828;
-	}
-}
+#include <cctype>
+#include <unordered_map>
+#include <utility>
 
 class EntityReader {
 public:
@@ -79,6 +69,13 @@ public:
 	}
 
 	static uintptr_t FindLocalPawn(const Memory& mem, const std::vector<uintptr_t>& chunks, int maxIndex) {
+		// Walk entity IDs 1..maxIndex. Controllers appear early, pawns appear
+		// right after them. We scan controllers first (via the 1-byte
+		// m_bIsLocalPlayerController flag) and dereference their m_hPawn
+		// handle to resolve the actual local pawn.
+		// NOTE: GetIdentityFromChunks takes a 1-based entity index directly;
+		// CEntityHandle already stores a 1-based index in the low 15 bits,
+		// so there is NO extra "+1" to add here.
 		for (int i = 1; i <= maxIndex; i++) {
 			uintptr_t identity = GetIdentityFromChunks(chunks, i);
 			if (!identity)
@@ -96,7 +93,7 @@ public:
 			if (pawnIndex0 <= 0)
 				continue;
 
-			uintptr_t pawnIdentity = GetIdentityFromChunks(chunks, pawnIndex0 + 1);
+			uintptr_t pawnIdentity = GetIdentityFromChunks(chunks, pawnIndex0);
 			if (!pawnIdentity)
 				continue;
 			uintptr_t pawn = mem.Read<uintptr_t>(pawnIdentity + offsets::CGameEntitySystem::m_pInstance);
@@ -137,10 +134,10 @@ public:
 
 			uint8_t team = mem.Read<uint8_t>(entity + offsets::C_BaseEntity::m_iTeamNum);
 
-			float mana = mem.Read<float>(entity + offsets::CDOTABaseNPC::m_flMana);
-			float maxMana = mem.Read<float>(entity + offsets::CDOTABaseNPC::m_flMaxMana);
-			int level = mem.Read<int>(entity + offsets::CDOTABaseNPC::m_iCurrentLevel);
-			bool isIllusion = mem.Read<uint8_t>(entity + offsets::CDOTABaseNPC::m_bIsIllusion) != 0;
+			float mana = mem.Read<float>(entity + offsets::C_DOTA_BaseNPC::m_flMana);
+			float maxMana = mem.Read<float>(entity + offsets::C_DOTA_BaseNPC::m_flMaxMana);
+			int level = mem.Read<int>(entity + offsets::C_DOTA_BaseNPC::m_iCurrentLevel);
+			bool isIllusion = mem.Read<uint8_t>(entity + offsets::C_DOTA_BaseNPC::m_bIsIllusion) != 0;
 
 			Vector3 origin{};
 			if (!GetEntityOrigin(mem, entity, origin))

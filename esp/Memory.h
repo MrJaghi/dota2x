@@ -10,27 +10,53 @@ public:
 	DWORD processId = 0;
 	uintptr_t clientDllBase = 0;
 
+	~Memory() { Close(); }
+
 	bool Attach(const wchar_t* processName, const wchar_t* moduleName) {
+		Close();
 		processId = GetProcessId(processName);
 		if (!processId)
 			return false;
 
-		processHandle = OpenProcess(PROCESS_ALL_ACCESS, FALSE, processId);
-		if (!processHandle || processHandle == INVALID_HANDLE_VALUE)
+		// Read-only ESP: VIRTUAL_MEMORY_READ is enough and is less
+		// likely to be flagged by AV/EDR than PROCESS_ALL_ACCESS.
+		processHandle = OpenProcess(PROCESS_VM_READ | PROCESS_QUERY_INFORMATION, FALSE, processId);
+		if (!processHandle || processHandle == INVALID_HANDLE_VALUE) {
+			processHandle = nullptr;
 			return false;
+		}
 
 		clientDllBase = GetModuleBase(moduleName);
-		return clientDllBase != 0;
+		if (!clientDllBase) {
+			Close();
+			return false;
+		}
+		return true;
+	}
+
+	void Close() {
+		if (processHandle && processHandle != INVALID_HANDLE_VALUE) {
+			CloseHandle(processHandle);
+		}
+		processHandle = nullptr;
+		processId = 0;
+		clientDllBase = 0;
 	}
 
 	template <typename T>
 	T Read(uintptr_t address) const {
 		T value{};
-		ReadProcessMemory(processHandle, (LPCVOID)address, &value, sizeof(T), nullptr);
+		if (!processHandle || !address) return value;
+		SIZE_T n = 0;
+		if (!ReadProcessMemory(processHandle, (LPCVOID)address, &value, sizeof(T), &n) || n != sizeof(T)) {
+			// Short or failed read: zero out so garbage isn't consumed.
+			value = T{};
+		}
 		return value;
 	}
 
 	bool ReadRaw(uintptr_t address, void* buffer, size_t size) const {
+		if (!processHandle || !address || !buffer || !size) return false;
 		SIZE_T bytesRead = 0;
 		return ReadProcessMemory(processHandle, (LPCVOID)address, buffer, size, &bytesRead) && bytesRead == size;
 	}

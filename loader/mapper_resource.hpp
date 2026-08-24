@@ -1,12 +1,14 @@
 #pragma once
 #include <stdint.h>
-#include <vector>
+#include <cstddef>
 
 namespace mapper_resource
 {
-	// Raw mapper binary image bytes (mapper.exe) embedded directly into loader
+	// Raw mapper binary image bytes (Mapper.exe) embedded directly into loader.
+	// Overwritten by bat\embed_mapper.bat after Mapper is built.
 	inline const uint8_t mapper_bytes[] = {
 		0x4D, 0x5A, 0x90, 0x00, 0x03, 0x00, 0x00, 0x00, 0x04, 0x00, 0x00, 0x00, 0xFF, 0xFF, 0x00, 0x00,
 		0xB8, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x40, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00
 	};
+	inline const size_t mapper_bytes_size = sizeof(mapper_bytes);
 }

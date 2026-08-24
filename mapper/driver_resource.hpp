@@ -1,12 +1,14 @@
 #pragma once
 #include <stdint.h>
-#include <vector>
+#include <cstddef>
 
 namespace driver_resource
 {
-	// Raw driver binary image bytes (SharedMemorySpectre.sys) embedded directly for mapper
+	// Raw driver binary image bytes (SharedMemorySpectre.sys) embedded directly for mapper.
+	// Overwritten by bat\embed_driver.bat after KernelDriver is built.
 	inline const uint8_t driver_bytes[] = {
 		0x4D, 0x5A, 0x90, 0x00, 0x03, 0x00, 0x00, 0x00, 0x04, 0x00, 0x00, 0x00, 0xFF, 0xFF, 0x00, 0x00,
 		0xB8, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x40, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00
 	};
+	inline const size_t driver_bytes_size = sizeof(driver_bytes);
 }

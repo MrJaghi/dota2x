@@ -6,17 +6,31 @@
 #include "kdmapper.hpp"
 #include "driver_resource.hpp"
 
-int main(int argc, char** argv)
+static bool IsRunAsAdmin()
+{
+	BOOL isAdmin = FALSE;
+	PSID adminGroup = NULL;
+	SID_IDENTIFIER_AUTHORITY ntAuthority = SECURITY_NT_AUTHORITY;
+	if (AllocateAndInitializeSid(&ntAuthority, 2, SECURITY_BUILTIN_DOMAIN_RID,
+		DOMAIN_ALIAS_RID_ADMINS, 0, 0, 0, 0, 0, 0, &adminGroup))
+	{
+		CheckTokenMembership(NULL, adminGroup, &isAdmin);
+		FreeSid(adminGroup);
+	}
+	return isAdmin == TRUE;
+}
+
+int wmain(int argc, wchar_t** argv)
 {
 	std::cout << "[+] DragonBurn Kernel Mapper" << std::endl;
 
-	if (!utils::SetSystemPrivilege(L"SeDebugPrivilege", true) || !utils::SetSystemPrivilege(L"SeLoadDriverPrivilege", true))
+	if (!IsRunAsAdmin())
 	{
-		std::cout << "[-] Failed to acquire required privileges (Run as Administrator)" << std::endl;
+		std::cout << "[-] This mapper must be run as Administrator." << std::endl;
 		return 1;
 	}
 
-	std::string driver_path = "driver.sys";
+	std::wstring driver_path = L"driver.sys";
 	if (argc > 1)
 	{
 		driver_path = argv[1];
@@ -26,7 +40,14 @@ int main(int argc, char** argv)
 	if (!utils::ReadFileToMemory(driver_path, &raw_driver_image))
 	{
 		std::cout << "[*] External driver.sys not found, using embedded kernel driver bytes..." << std::endl;
-		raw_driver_image.assign(driver_resource::driver_bytes, driver_resource::driver_bytes + sizeof(driver_resource::driver_bytes));
+		raw_driver_image.assign(driver_resource::driver_bytes,
+			driver_resource::driver_bytes + driver_resource::driver_bytes_size);
+	}
+
+	if (raw_driver_image.empty())
+	{
+		std::cout << "[-] Driver image is empty" << std::endl;
+		return 1;
 	}
 
 	HANDLE device_handle = intel_driver::Load();

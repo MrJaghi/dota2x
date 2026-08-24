@@ -3,18 +3,7 @@
 #include <string>
 #include <vector>
 #include <functional>
-
-struct Vector3 {
-	float x = 0, y = 0, z = 0;
-};
-
-struct Vector2 {
-	float x = 0, y = 0;
-};
-
-struct ViewMatrix {
-	float m[4][4];
-};
+#include "VectorMath.h"
 
 struct EspSettings {
 	bool enabled = true;
