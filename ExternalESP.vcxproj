@@ -83,6 +83,7 @@
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="esp\Config.h" />
+    <ClInclude Include="esp\EntityLayout.h" />
     <ClInclude Include="esp\EntityReader.h" />
     <ClInclude Include="esp\EspRenderer.h" />
     <ClInclude Include="esp\VectorMath.h" />

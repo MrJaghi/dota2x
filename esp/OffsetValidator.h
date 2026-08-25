@@ -9,6 +9,7 @@
 #include "Memory.h"
 #include "Offsets.h"
 #include "VectorMath.h"
+#include "EntityReader.h"
 
 namespace OffsetValidator
 {
@@ -108,31 +109,12 @@ namespace OffsetValidator
 		}
 
 		// Now find the local pawn and sanity-check the per-entity field offsets.
+		// This goes through EntityReader, which walks the list using the
+		// EntityLayout detected at startup (stride / pInstance / index bias).
 		uintptr_t localPawn = 0;
 		{
-			int maxScan = 16 * CGameEntitySystem::ChunkSize;
-			for (int c = 0; c < 16; c++) {
-				uintptr_t chunk = mem.Read<uintptr_t>(entitySystem + CGameEntitySystem::m_EntityPtrArray + 8ull * c);
-				if (!chunk) continue;
-				for (int s = 0; s < CGameEntitySystem::ChunkSize; s++) {
-					uintptr_t identity = chunk + (uintptr_t)CGameEntitySystem::IdentityStride * s;
-					uintptr_t inst = mem.Read<uintptr_t>(identity + CGameEntitySystem::m_pInstance);
-					if (!inst) continue;
-					uint8_t isLocal = mem.Read<uint8_t>(inst + CBasePlayerController::m_bIsLocalPlayerController);
-					if (isLocal != 1) continue;
-					uint32_t handle = mem.Read<uint32_t>(inst + CBasePlayerController::m_hPawn);
-					int pIdx = (int)(handle & 0x7FFF);
-					if (pIdx <= 0) continue;
-					int ci = (pIdx - 1) / CGameEntitySystem::ChunkSize;
-					int si = (pIdx - 1) % CGameEntitySystem::ChunkSize;
-					if (ci < 0 || ci >= 16) continue;
-					uintptr_t pc = mem.Read<uintptr_t>(entitySystem + CGameEntitySystem::m_EntityPtrArray + 8ull * ci);
-					if (!pc) continue;
-					uintptr_t pi = pc + (uintptr_t)CGameEntitySystem::IdentityStride * si;
-					uintptr_t pawn = mem.Read<uintptr_t>(pi + CGameEntitySystem::m_pInstance);
-					if (pawn > 0x10000ull) { localPawn = pawn; c = 16; break; }
-				}
-			}
+			std::vector<uintptr_t> chunks = EntityReader::ReadChunkPointers(mem, entitySystem, 16);
+			localPawn = EntityReader::FindLocalPawn(mem, chunks, 16 * CGameEntitySystem::ChunkSize);
 		}
 
 		if (!localPawn) {

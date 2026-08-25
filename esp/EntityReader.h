@@ -2,6 +2,7 @@
 #include "Memory.h"
 #include "VectorMath.h"
 #include "Offsets.h"
+#include "EntityLayout.h"
 #include "Config.h"
 #include <vector>
 #include <string>
@@ -28,14 +29,17 @@ public:
 	}
 
 	static uintptr_t GetIdentityFromChunks(const std::vector<uintptr_t>& chunks, int index) {
-		int zeroBased = index - 1;
-		int chunkIndex = zeroBased / offsets::CGameEntitySystem::ChunkSize;
-		int slotInChunk = zeroBased % offsets::CGameEntitySystem::ChunkSize;
+		const auto& L = EntityLayout::Get();
+		int adj = index - L.bias;
+		if (adj < 0)
+			return 0;
+		int chunkIndex = adj / offsets::CGameEntitySystem::ChunkSize;
+		int slotInChunk = adj % offsets::CGameEntitySystem::ChunkSize;
 
 		if (chunkIndex < 0 || chunkIndex >= (int)chunks.size() || !chunks[chunkIndex])
 			return 0;
 
-		return chunks[chunkIndex] + offsets::CGameEntitySystem::IdentityStride * slotInChunk;
+		return chunks[chunkIndex] + L.stride * slotInChunk;
 	}
 
 	static std::string GetDesignerName(const Memory& mem, uintptr_t identity) {
@@ -73,14 +77,13 @@ public:
 		// right after them. We scan controllers first (via the 1-byte
 		// m_bIsLocalPlayerController flag) and dereference their m_hPawn
 		// handle to resolve the actual local pawn.
-		// NOTE: GetIdentityFromChunks takes a 1-based entity index directly;
-		// CEntityHandle already stores a 1-based index in the low 15 bits,
-		// so there is NO extra "+1" to add here.
+		// Index -> slot math (bias, stride, entity-pointer offset) comes from
+		// EntityLayout, which is probed against live memory at startup.
 		for (int i = 1; i <= maxIndex; i++) {
 			uintptr_t identity = GetIdentityFromChunks(chunks, i);
 			if (!identity)
 				continue;
-			uintptr_t entity = mem.Read<uintptr_t>(identity + offsets::CGameEntitySystem::m_pInstance);
+			uintptr_t entity = mem.Read<uintptr_t>(identity + EntityLayout::Get().pInstance);
 			if (!entity)
 				continue;
 
@@ -96,7 +99,7 @@ public:
 			uintptr_t pawnIdentity = GetIdentityFromChunks(chunks, pawnIndex0);
 			if (!pawnIdentity)
 				continue;
-			uintptr_t pawn = mem.Read<uintptr_t>(pawnIdentity + offsets::CGameEntitySystem::m_pInstance);
+			uintptr_t pawn = mem.Read<uintptr_t>(pawnIdentity + EntityLayout::Get().pInstance);
 			if (IsValidHeroEntity(mem, pawn))
 				return pawn;
 		}
@@ -115,7 +118,7 @@ public:
 			uintptr_t identity = GetIdentityFromChunks(chunks, i);
 			if (!identity)
 				continue;
-			uintptr_t entity = mem.Read<uintptr_t>(identity + offsets::CGameEntitySystem::m_pInstance);
+			uintptr_t entity = mem.Read<uintptr_t>(identity + EntityLayout::Get().pInstance);
 			if (!entity || entity == localPawn)
 				continue;
 
@@ -212,7 +215,7 @@ public:
 			uintptr_t identity = GetIdentityFromChunks(chunks, i);
 			if (!identity)
 				continue;
-			uintptr_t entity = mem.Read<uintptr_t>(identity + offsets::CGameEntitySystem::m_pInstance);
+			uintptr_t entity = mem.Read<uintptr_t>(identity + EntityLayout::Get().pInstance);
 			if (!entity || entity == localPawn)
 				continue;
 

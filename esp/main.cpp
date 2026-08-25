@@ -13,6 +13,7 @@
 #include "Memory.h"
 #include "VectorMath.h"
 #include "Offsets.h"
+#include "EntityLayout.h"
 #include "OffsetValidator.h"
 #include "Overlay.h"
 #include "Config.h"
@@ -50,9 +51,16 @@ public:
 		printf("[+] Overlay created (%dx%d)\n", overlay.width, overlay.height);
 
 		// Offsets are HARDCODED at compile time: Offsets.h #includes the
-		// dumper files from output\ verbatim (no runtime parsing). Validate
-		// them against the live client.dll so we get a console warning
-		// instead of silent garbage when the game updates.
+		// dumper files from output\ verbatim (no runtime parsing).
+
+		// Detect the engine-side entity-list layout (CEntityIdentity stride,
+		// entity-pointer offset, index->slot convention) against live memory.
+		// This is 100% read-only and does not touch the kernel driver.
+		uintptr_t entitySystem = memory.Read<uintptr_t>(memory.clientDllBase + offsets::client_dll::dwEntityList);
+		EntityLayout::Detect(memory, entitySystem);
+
+		// Validate offsets against the live client.dll so we get a console
+		// warning instead of silent garbage when the game updates.
 		OffsetValidator::ValidateAll(memory);
 
 		SetupUI();
@@ -154,6 +162,18 @@ private:
 
 		if (!entitySystem)
 			return;
+
+		// If the layout probe couldn't lock in yet (e.g. the ESP started while
+		// Dota 2 was still in the main menu, where there is no local pawn),
+		// keep retrying every couple of seconds until a match provides one.
+		if (!EntityLayout::Detected()) {
+			static DWORD lastProbe = 0;
+			DWORD now = GetTickCount();
+			if (now - lastProbe > 2000) {
+				lastProbe = now;
+				EntityLayout::Detect(memory, entitySystem);
+			}
+		}
 
 		std::vector<uintptr_t> chunks = EntityReader::ReadChunkPointers(memory, entitySystem, ChunkCount);
 		uintptr_t localPawn = EntityReader::FindLocalPawn(memory, chunks, MaxScanIndex);
