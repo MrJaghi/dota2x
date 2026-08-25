@@ -367,11 +367,11 @@ static bool LoadDriver() {
 }
 
 // ------------------------------------------------------------
-// External ESP is launched *next to* Loader.exe (not in %TEMP%)
-// so that when ESP calls GetModuleFileNameW to find its exe dir,
-// it lands in the same folder as output\*.hpp. Without this, the
-// ESP runs from a temp dir, sees no output folder, and falls back
-// to compiled-in (stale) defaults.
+// External ESP is launched *next to* Loader.exe (not in %TEMP%).
+// Offsets are hardcoded into ExternalESP.exe at compile time (it
+// #includes output\*.hpp verbatim -- see esp\Offsets.h), so the ESP
+// no longer needs any files at runtime; launching next to us simply
+// keeps the binary in a predictable place for restarts/debugging.
 // We also launch it in its own console (CREATE_NEW_CONSOLE) so
 // closing the ESP window doesn't kill the loader, and vice versa.
 // We stash the process handle so the cleanup path can Terminate it.
@@ -394,8 +394,8 @@ static bool LaunchEsp() {
         g_tempEspPath[0] = 0; // not a temp file -- don't delete on exit
         PrintInfo("Using on-disk " + espPath);
     } else {
-        // No on-disk binary -- extract embedded payload next to us too
-        // (so it inherits our output\ directory), not to %TEMP%.
+        // No on-disk binary -- extract embedded payload next to us
+        // (predictable location), not to %TEMP%.
         espPath = nextToUs;
         strncpy_s(g_tempEspPath, espPath.c_str(), sizeof(g_tempEspPath) - 1);
         bool extracted = ExtractFile(espPath, esp_resource::esp_bytes, esp_resource::esp_bytes_size);

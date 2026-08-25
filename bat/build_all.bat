@@ -132,19 +132,13 @@ echo ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 if errorlevel 1 ( echo [-] Build failed: Loader & goto :fail )
 echo [+] Loader built successfully.
 
-REM --- Copy output\ folder (dumper-generated .hpp / .ini) next to Loader.exe ---
+REM --- Offsets are HARDCODED at compile time ---
+REM ExternalESP.exe #includes output\offsets.hpp + output\client_dll.hpp
+REM verbatim (see esp\Offsets.h), so there is nothing to copy next to
+REM Loader.exe anymore. To update offsets after a game patch: re-dump
+REM into output\ and re-run this script.
 echo.
-echo ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-echo  Copying output\ folder to build directories...
-echo ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-if not exist "x64\%CONFIG%\output" mkdir "x64\%CONFIG%\output"
-REM Copy every dumper hpp so dropping the full dota2-dumper output/ folder
-REM verbatim works (offsets.hpp + client_dll.hpp + ...).
-for %%F in (output\*.hpp) do (
-    copy /Y "%%F" "x64\%CONFIG%\output\" >nul
-    echo [+] %%~nxF copied to x64\%CONFIG%\output\
-)
-REM (Legacy .ini support still works at runtime but we don't ship one.)
+echo  [*] Offsets are hardcoded into ExternalESP.exe from output\*.hpp at compile time.
 
 echo.
 echo =======================================================

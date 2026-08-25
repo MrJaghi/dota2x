@@ -13,7 +13,6 @@
 #include "Memory.h"
 #include "VectorMath.h"
 #include "Offsets.h"
-#include "OffsetLoader.h"
 #include "OffsetValidator.h"
 #include "Overlay.h"
 #include "Config.h"
@@ -50,11 +49,10 @@ public:
 			Sleep(1000);
 		printf("[+] Overlay created (%dx%d)\n", overlay.width, overlay.height);
 
-		// Load any offset overrides from <exe_dir>\output\*.hpp (and .ini fallback).
-		OffsetLoader::LoadFromFile();
-
-		// Validate offsets against the live client.dll so we get a console
-		// warning instead of silent garbage when the game updates.
+		// Offsets are HARDCODED at compile time: Offsets.h #includes the
+		// dumper files from output\ verbatim (no runtime parsing). Validate
+		// them against the live client.dll so we get a console warning
+		// instead of silent garbage when the game updates.
 		OffsetValidator::ValidateAll(memory);
 
 		SetupUI();
@@ -181,6 +179,19 @@ private:
 
 		lastCreeps = EntityReader::CollectCreepTargets(memory, chunks, MaxScanIndex, localPawn, localTeam,
 			localOrigin, viewMatrix, overlay.width, overlay.height);
+	}
+
+	void Render() {
+		overlay.BeginFrame();
+
+		// ESP boxes / bars / labels go onto ImGui's background draw list so
+		// they stay visible even while the menu is closed.
+		EspRenderer::Draw(espSettings, lastTargets, lastCreeps);
+
+		if (menuOpen)
+			UiManager::DrawMenu(menuOpen, menuCategories);
+
+		overlay.EndFrameAndPresent();
 	}
 
 	std::vector<EspTarget> lastTargets;

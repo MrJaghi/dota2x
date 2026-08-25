@@ -66,12 +66,8 @@ namespace OffsetValidator
 
 		// Top-level client.dll pointers -- must point to valid live memory.
 		ok &= IsPlausibleRelativePointer(mem, base, client_dll::dwEntityList,        "client_dll::dwEntityList");
-		// dwLocalPlayerPawnBase is OPTIONAL: Anroshka's dumper doesn't provide it
-		// (we find the local pawn via CBasePlayerController::m_bIsLocalPlayerController).
-		// Only validate if the user overrode it (non-zero).
-		if (client_dll::dwLocalPlayerPawnBase != 0) {
-			ok &= IsPlausibleRelativePointer(mem, base, client_dll::dwLocalPlayerPawnBase, "client_dll::dwLocalPlayerPawn");
-		}
+		// NOTE: the local pawn is found via CBasePlayerController::m_bIsLocalPlayerController,
+		// so no dwLocalPlayerPawn global is needed (the a2x dump doesn't provide one).
 		// dwViewMatrix points DIRECTLY at a ViewMatrix struct (16 floats), NOT at a pointer.
 		// Reading a uintptr_t from it would interpret matrix floats as an address and
 		// always look bogus (e.g. 0x3F8000003F800000). Read the struct directly and
@@ -174,14 +170,6 @@ namespace OffsetValidator
 			ok = false;
 		}
 
-		// dwLocalPlayerPawnBase is not present in Anroshka's dump (we derive the
-		// local pawn via CBasePlayerController::m_bIsLocalPlayerController). If it
-		// got overridden to a nonzero stale value, warn about it.
-		if (client_dll::dwLocalPlayerPawnBase != 0) {
-			ok &= IsPlausibleRelativePointer(mem, base, client_dll::dwLocalPlayerPawnBase,
-				"client_dll::dwLocalPlayerPawn");
-		}
-
 		// Hero-specific fields (level/mana/illusion).
 		int level = mem.Read<int>(localPawn + C_DOTA_BaseNPC::m_iCurrentLevel);
 		if (level < 1 || level > 30) {
@@ -203,7 +191,7 @@ namespace OffsetValidator
 		}
 
 		if (ok) printf("[+] All offsets look valid.\n");
-		else   printf("[!] One or more offsets failed validation -- drop fresh dumper *.hpp files into output\\ and restart!\n");
+		else   printf("[!] One or more offsets failed validation -- drop fresh dumper files into output\\ and REBUILD the ESP!\n");
 		return ok;
 	}
 }

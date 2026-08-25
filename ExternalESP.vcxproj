@@ -45,7 +45,7 @@
       <PreprocessorDefinitions>_DEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
       <LanguageStandard>stdcpp17</LanguageStandard>
-      <AdditionalIncludeDirectories>$(ProjectDir)esp\vendor\imgui;$(ProjectDir)esp\vendor\imgui\backends;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>$(ProjectDir)output;$(ProjectDir)esp\vendor\imgui;$(ProjectDir)esp\vendor\imgui\backends;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
     </ClCompile>
     <Link>
       <SubSystem>Console</SubSystem>
@@ -62,7 +62,7 @@
       <PreprocessorDefinitions>NDEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
       <LanguageStandard>stdcpp17</LanguageStandard>
-      <AdditionalIncludeDirectories>$(ProjectDir)esp\vendor\imgui;$(ProjectDir)esp\vendor\imgui\backends;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>$(ProjectDir)output;$(ProjectDir)esp\vendor\imgui;$(ProjectDir)esp\vendor\imgui\backends;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
     </ClCompile>
     <Link>
       <SubSystem>Console</SubSystem>
@@ -88,6 +88,7 @@
     <ClInclude Include="esp\VectorMath.h" />
     <ClInclude Include="esp\Memory.h" />
     <ClInclude Include="esp\Offsets.h" />
+    <ClInclude Include="esp\OffsetValidator.h" />
     <ClInclude Include="esp\Overlay.h" />
     <ClInclude Include="esp\UiManager.h" />
   </ItemGroup>
