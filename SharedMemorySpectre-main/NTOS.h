@@ -2,10 +2,10 @@
 #include "includes.h"
 
 _declspec(noinline) auto resolve_address(
-    uintptr_t Instruction,
+    ULONG_PTR Instruction,
     ULONG OffsetOffset,
     ULONG InstructionSize
-) -> uintptr_t;
+) -> ULONG_PTR;
 
 PVOID resolve_relative_address(
     _In_ PVOID Instruction,
@@ -20,7 +20,7 @@ namespace crt
 
 namespace UMEM {
     PBYTE find_pattern(PVOID base, LPCSTR pattern, LPCSTR mask);
-    auto find_pattern_in_section(uintptr_t Base, CHAR* Pattern, CHAR* Mask, char* Scan_Section) -> uintptr_t;
+    auto find_pattern_in_section(ULONG_PTR Base, CHAR* Pattern, CHAR* Mask, char* Scan_Section) -> ULONG_PTR;
 }
 
 namespace NTOS {
@@ -28,11 +28,11 @@ namespace NTOS {
     PERESOURCE GetPsLoaded();
 
     PVOID GetProcessIdByNameKernel(PWSTR processName);
-    uintptr_t get_kernel_module(const char* name);
-    _declspec(noinline) auto get_ntos_base_address() -> uintptr_t;
+    ULONG_PTR get_kernel_module(const char* name);
+    _declspec(noinline) auto get_ntos_base_address() -> ULONG_PTR;
 
     template<class type_t>
     type_t find_export(const char* export_name);
 
-    uintptr_t get_eprocess(const wchar_t* process_name);
+    ULONG_PTR get_eprocess(const wchar_t* process_name);
 }

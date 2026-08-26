@@ -1,5 +1,4 @@
 #pragma once
-#include <cstdint>
 #include <windef.h>
  
 #ifdef _MSC_VER
@@ -17,12 +16,10 @@
 #define driver_api inline
 #include "structs.h"
 #include <ntimage.h>
-#include <xtr1common>
- 
 namespace struc
 {
-	extern std::uintptr_t ntos_image_base;
-	extern std::uintptr_t kernel_base;
+	extern ULONG_PTR ntos_image_base;
+	extern ULONG_PTR kernel_base;
 	extern ULONGLONG SavedCr3;
 }
 

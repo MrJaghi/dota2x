@@ -18,6 +18,7 @@
     <Configuration>Debug</Configuration>
     <Platform Condition="'$(Platform)' == ''">x64</Platform>
     <RootNamespace>KernelDriver</RootNamespace>
+    <TargetName>SharedMemorySpectre</TargetName>
     <WindowsTargetPlatformVersion>$(LatestTargetPlatformVersion)</WindowsTargetPlatformVersion>
   </PropertyGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.Default.props" />
@@ -41,6 +42,7 @@
   </PropertyGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.props" />
   <ImportGroup Label="ExtensionSettings" />
+  <ImportGroup Label="Shared" />
   <ImportGroup Label="PropertySheets">
     <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
   </ImportGroup>
@@ -48,10 +50,16 @@
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
     <ClCompile>
       <WarningLevel>Level3</WarningLevel>
-      <LanguageStandard>stdcpp17</LanguageStandard>
+      <TreatWarningAsError>false</TreatWarningAsError>
+      <LanguageStandard>stdcpp20</LanguageStandard>
+      <PreprocessorDefinitions>KERNEL_MODE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <AdditionalIncludeDirectories>SharedMemorySpectre-main;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
     </ClCompile>
+    <DriverSign>
+      <FileDigestAlgorithm>sha256</FileDigestAlgorithm>
+    </DriverSign>
     <Link>
+      <TreatLinkerWarningAsErrors>false</TreatLinkerWarningAsErrors>
       <EntryPointSymbol>DriverEntry</EntryPointSymbol>
     </Link>
   </ItemDefinitionGroup>
@@ -59,10 +67,16 @@
     <ClCompile>
       <LanguageStandard>stdcpp20</LanguageStandard>
       <WarningLevel>Level1</WarningLevel>
+      <TreatWarningAsError>false</TreatWarningAsError>
       <BufferSecurityCheck>false</BufferSecurityCheck>
+      <PreprocessorDefinitions>KERNEL_MODE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <AdditionalIncludeDirectories>SharedMemorySpectre-main;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
     </ClCompile>
+    <DriverSign>
+      <FileDigestAlgorithm>sha256</FileDigestAlgorithm>
+    </DriverSign>
     <Link>
+      <TreatLinkerWarningAsErrors>false</TreatLinkerWarningAsErrors>
       <EntryPointSymbol>DriverEntry</EntryPointSymbol>
     </Link>
   </ItemDefinitionGroup>
@@ -70,6 +84,13 @@
     <ClInclude Include="SharedMemorySpectre-main\bootstrap.h" />
     <ClInclude Include="SharedMemorySpectre-main\callstack.h" />
     <ClInclude Include="SharedMemorySpectre-main\communication.hpp" />
+    <ClInclude Include="SharedMemorySpectre-main\cr3bypass\cr3.h" />
+    <ClInclude Include="SharedMemorySpectre-main\cr3bypass\Helper.h" />
+    <ClInclude Include="SharedMemorySpectre-main\cr3bypass\import.h" />
+    <ClInclude Include="SharedMemorySpectre-main\cr3bypass\imports.h" />
+    <ClInclude Include="SharedMemorySpectre-main\cr3bypass\memory.hpp" />
+    <ClInclude Include="SharedMemorySpectre-main\cr3bypass\read.h" />
+    <ClInclude Include="SharedMemorySpectre-main\cr3bypass\structs.h" />
     <ClInclude Include="SharedMemorySpectre-main\c_xor.h" />
     <ClInclude Include="SharedMemorySpectre-main\driver.h" />
     <ClInclude Include="SharedMemorySpectre-main\encrypt.h" />
@@ -89,6 +110,10 @@
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="SharedMemorySpectre-main\bootstrap.cpp" />
+    <ClCompile Include="SharedMemorySpectre-main\cr3bypass\cr3.cpp" />
+    <ClCompile Include="SharedMemorySpectre-main\cr3bypass\Helper.cpp" />
+    <ClCompile Include="SharedMemorySpectre-main\cr3bypass\read.cpp" />
+    <ClCompile Include="SharedMemorySpectre-main\cr3bypass\structs.cpp" />
     <ClCompile Include="SharedMemorySpectre-main\driver.cpp" />
     <ClCompile Include="SharedMemorySpectre-main\EXPORTS.cpp" />
     <ClCompile Include="SharedMemorySpectre-main\NTOS.cpp" />

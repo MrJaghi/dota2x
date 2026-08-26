@@ -1,19 +1,19 @@
 #include "driver.h"
 
 struct commAddr {
-    uintptr_t pFct; // int
-    uintptr_t pPid; // int
-    uintptr_t pAddr; // uintptr_t
-    uintptr_t pSize; // size_t
-    uintptr_t pValue; // ULONGLONG
-    uintptr_t pKM; // response
-    uintptr_t pEnd; // bool
+    ULONG_PTR pFct; // int
+    ULONG_PTR pPid; // int
+    ULONG_PTR pAddr; // ULONG_PTR
+    ULONG_PTR pSize; // size_t
+    ULONG_PTR pValue; // ULONGLONG
+    ULONG_PTR pKM; // response
+    ULONG_PTR pEnd; // bool
 };
 
 struct respAddr {
-    uintptr_t pBuff; // PVOID
-    uintptr_t pStatus; // int
-    uintptr_t pEnd; // bool
+    ULONG_PTR pBuff; // PVOID
+    ULONG_PTR pStatus; // int
+    ULONG_PTR pEnd; // bool
 };
 
 commAddr cAddr;
@@ -30,7 +30,7 @@ struct communication
 {
     int fct; // 10 = Read process memory, 20 = Write process memory
     int pid;
-    uintptr_t addr;
+    ULONG_PTR addr;
     SIZE_T size;
     ULONGLONG value;
     response KMresponse;
@@ -57,7 +57,7 @@ typedef struct _req_Obj {
     volatile LONG InUse;   // 0=free, 1=processing, 2=done
     int g_pid;
     req_op Op;
-	uint64_t baseaddress;
+	UINT64 baseaddress;
     PVOID TargetAddress;
     ULONG Size;
     PVOID buffer;

@@ -12,7 +12,7 @@ skCrypter
 							*Not removing this part is appreciated*
 ____________________________________________________________________________________________________________*/
 
-#ifdef _KERNEL_MODE
+#ifdef KERNEL_MODE
 inline namespace SKCRYPTUTILS
 {
 	// STRUCT TEMPLATE remove_reference

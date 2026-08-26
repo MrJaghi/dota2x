@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <Project DefaultTargets="Build" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
-  <ItemGroup ProjectConfigurations="Debug|x64">
+  <ItemGroup Label="ProjectConfigurations">
     <ProjectConfiguration Include="Debug|x64">
       <Configuration>Debug</Configuration>
       <Platform>x64</Platform>
@@ -45,7 +45,7 @@
       <PreprocessorDefinitions>_DEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
       <LanguageStandard>stdcpp17</LanguageStandard>
-      <AdditionalIncludeDirectories>$(ProjectDir)esp;$(ProjectDir)esp\vendor\imgui;$(ProjectDir)esp\vendor\imgui\backends;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>$(ProjectDir)output;$(ProjectDir)esp\vendor\imgui;$(ProjectDir)esp\vendor\imgui\backends;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
     </ClCompile>
     <Link>
       <SubSystem>Console</SubSystem>
@@ -62,7 +62,7 @@
       <PreprocessorDefinitions>NDEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
       <LanguageStandard>stdcpp17</LanguageStandard>
-      <AdditionalIncludeDirectories>$(ProjectDir)esp;$(ProjectDir)esp\vendor\imgui;$(ProjectDir)esp\vendor\imgui\backends;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>$(ProjectDir)output;$(ProjectDir)esp\vendor\imgui;$(ProjectDir)esp\vendor\imgui\backends;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
     </ClCompile>
     <Link>
       <SubSystem>Console</SubSystem>
@@ -83,11 +83,13 @@
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="esp\Config.h" />
+    <ClInclude Include="esp\EntityLayout.h" />
     <ClInclude Include="esp\EntityReader.h" />
     <ClInclude Include="esp\EspRenderer.h" />
-    <ClInclude Include="esp\Math.h" />
+    <ClInclude Include="esp\VectorMath.h" />
     <ClInclude Include="esp\Memory.h" />
     <ClInclude Include="esp\Offsets.h" />
+    <ClInclude Include="esp\OffsetValidator.h" />
     <ClInclude Include="esp\Overlay.h" />
     <ClInclude Include="esp\UiManager.h" />
   </ItemGroup>
