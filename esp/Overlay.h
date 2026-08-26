@@ -25,7 +25,9 @@ public:
 	HWND overlayWnd = nullptr;
 	HWND gameWnd = nullptr;
 	int width = 0, height = 0;
-	bool clickable = false;
+	// game client-area origin in SCREEN coordinates (for SendInput math)
+	int clientOriginX = 0, clientOriginY = 0;
+	bool focused = false;
 
 	ID3D11Device* device = nullptr;
 	ID3D11DeviceContext* context = nullptr;
@@ -46,6 +48,8 @@ public:
 		GetClientRect(gameWnd, &rect);
 		POINT topLeft{ rect.left, rect.top };
 		ClientToScreen(gameWnd, &topLeft);
+		clientOriginX = topLeft.x;
+		clientOriginY = topLeft.y;
 		width = rect.right - rect.left;
 		height = rect.bottom - rect.top;
 
@@ -57,15 +61,17 @@ public:
 		wc.lpszClassName = kClassName;
 		wc.hCursor = LoadCursorW(nullptr, IDC_ARROW);
 		// RegisterClassEx fails with ERROR_CLASS_ALREADY_EXISTS on the
-		// second Create() (after a Dota restart); that's fine — we reuse
+		// second Create() (after a Dota restart); that's fine -- we reuse
 		// the existing class.
 		RegisterClassExW(&wc);
 
+		// NOTE: WS_EX_TRANSPARENT stays on FOREVER now. The old build used
+		// to strip it while the menu was open, which turned this fullscreen
+		// topmost window into a wall that ate every mouse event on the
+		// screen ("my mouse doesn't even move"). Menu input is handled by
+		// InputRouter's low-level hook instead -- the overlay itself never
+		// takes input of any kind.
 		overlayWnd = CreateWindowExW(
-			// WS_EX_NOACTIVATE is critical: it keeps the overlay from stealing
-			// keyboard focus when the user clicks on ImGui menu items, so
-			// Dota 2 stays the foreground window and our "is game focused"
-			// heuristic doesn't incorrectly hide the overlay mid-click.
 			WS_EX_LAYERED | WS_EX_TRANSPARENT | WS_EX_TOPMOST | WS_EX_TOOLWINDOW | WS_EX_NOACTIVATE,
 			kClassName, L"DragonBurn ESP", WS_POPUP,
 			topLeft.x, topLeft.y, width, height,
@@ -85,10 +91,16 @@ public:
 		ShowWindow(overlayWnd, SW_SHOW);
 		UpdateWindow(overlayWnd);
 
+		m_visible = true;
+		m_moved = true;
+		m_sizeChanged = false;
+		m_lastTopmost = GetTickCount64();
+
 		IMGUI_CHECKVERSION();
 		ImGui::CreateContext();
 		ImGuiIO& io = ImGui::GetIO();
 		io.ConfigFlags |= ImGuiConfigFlags_NoMouseCursorChange;
+		io.IniFilename = nullptr; // no imgui.ini churn; the menu saves its own pos
 		ImGui::StyleColorsDark();
 
 		ImGui_ImplWin32_Init(overlayWnd);
@@ -97,31 +109,29 @@ public:
 		return true;
 	}
 
+	// Keep the overlay glued to the game window. This used to call
+	// SetWindowPos + ShowWindow + SetWindowLongPtr EVERY frame, which is a
+	// heavyweight Win32 round-trip and contributed to the menu-time lag; now
+	// it only touches the window when something actually changed.
 	void SyncWithGameWindow()
 	{
-		if (!IsWindow(gameWnd)) return;
+		if (!IsWindow(gameWnd)) { focused = false; return; }
 
-		// Hide the overlay entirely when Dota 2 is NOT the foreground window
-		// (Alt+Tabbed out, browser focused, etc.). We still keep the frame loop
-		// alive so we instantly reappear on switch-back.
+		// Treat our own overlay as "game focused" too -- WS_EX_NOACTIVATE
+		// should keep the game in front, but if the overlay does receive
+		// activation we still want the ESP + menu to keep running.
 		HWND fg = GetForegroundWindow();
-		// Treat our own overlay as "game focused" too -- when the user clicks
-		// on ImGui menu items the overlay may briefly own the foreground;
-		// the game is still the target and we must not hide/close the menu.
-		bool gameFocused = (fg == gameWnd) || (fg == overlayWnd);
+		focused = (fg == gameWnd) || (fg == overlayWnd);
 
-		// The menu forces the overlay clickable; if the game isn't focused, also
-		// force-transparent so the overlay can never steal clicks on other apps.
-		if (gameFocused) {
-			if (IsWindowVisible(overlayWnd) == FALSE)
-				ShowWindow(overlayWnd, SW_SHOWNOACTIVATE);
-			// Only enforce clickable state when focused (no clicks stolen outside)
-			if (clickable) SetLayeredClickable(true);
-			else           SetLayeredClickable(false);
-		} else {
-			// Game is in background: hide overlay completely so it doesn't sit on
-			// top of Chrome/Desktop/Discord, and force it non-clickable just in case.
-			ShowWindow(overlayWnd, SW_HIDE);
+		if (!focused) {
+			if (m_visible) {
+				ShowWindow(overlayWnd, SW_HIDE);
+				m_visible = false;
+			}
+		} else if (!m_visible) {
+			ShowWindow(overlayWnd, SW_SHOWNOACTIVATE);
+			m_visible = true;
+			m_moved = true; // force a SetWindowPos next block
 		}
 
 		RECT rect;
@@ -131,37 +141,40 @@ public:
 		int newWidth = rect.right - rect.left;
 		int newHeight = rect.bottom - rect.top;
 
-		SetWindowPos(overlayWnd, HWND_TOPMOST, topLeft.x, topLeft.y, newWidth, newHeight,
-			SWP_NOACTIVATE | (gameFocused ? SWP_SHOWWINDOW : SWP_HIDEWINDOW));
-
-		if (newWidth != width || newHeight != height)
-		{
+		if (newWidth != width || newHeight != height) {
 			width = newWidth;
 			height = newHeight;
-			ResizeSwapChain();
+			m_moved = true;
+			m_sizeChanged = true;
+		}
+		if (topLeft.x != clientOriginX || topLeft.y != clientOriginY) {
+			clientOriginX = topLeft.x;
+			clientOriginY = topLeft.y;
+			m_moved = true;
+		}
+
+		// Periodically re-assert topmost (other always-on-top apps can
+		// steal the Z slot) -- but at 0.5 Hz, not 60 Hz.
+		ULONGLONG now = GetTickCount64();
+		bool reTopmost = (now - m_lastTopmost) > 500;
+		if ((m_moved || reTopmost) && focused) {
+			SetWindowPos(overlayWnd, HWND_TOPMOST,
+				clientOriginX, clientOriginY, width, height,
+				SWP_NOACTIVATE | SWP_SHOWWINDOW);
+			m_moved = false;
+			m_lastTopmost = now;
+			if (m_sizeChanged) {
+				ResizeSwapChain();
+				m_sizeChanged = false;
+			}
 		}
 	}
 
-	// Returns true while the overlay is visible (game focused).
-	// We treat both the game window AND our own overlay window as "focused"
-	// because WS_EX_NOACTIVATE should keep the game in front, but if the
-	// overlay does receive activation (e.g. the user alt-tabs to it during
-	// menu use), we still want the ESP + menu to keep running.
-	bool IsGameFocused() const
-	{
-		if (!IsWindow(gameWnd)) return false;
-		HWND fg = GetForegroundWindow();
-		return (fg == gameWnd) || (fg == overlayWnd);
-	}
+	bool IsGameFocused() const { return focused; }
 
-	void SetClickable(bool value)
-	{
-		if (clickable == value) return;
-		clickable = value;
-		SetLayeredClickable(value);
-	}
-
-	// Pump the Windows message queue -- must be called each frame before input/render.
+	// Pump the Windows message queue -- must be called each frame before
+	// input/render. Low-level hook callbacks (InputRouter) are also delivered
+	// while this thread pumps messages.
 	void PumpMessages()
 	{
 		MSG msg{};
@@ -208,36 +221,28 @@ public:
 		}
 		gameWnd = nullptr;
 		width = height = 0;
-		clickable = false;
+		clientOriginX = clientOriginY = 0;
+		focused = false;
+		m_visible = false;
 	}
 
 private:
-	void SetLayeredClickable(bool value)
-	{
-		if (!overlayWnd) return;
-		LONG_PTR exStyle = GetWindowLongPtrW(overlayWnd, GWL_EXSTYLE);
-		if (value)
-			exStyle &= ~WS_EX_TRANSPARENT;
-		else
-			exStyle |= WS_EX_TRANSPARENT;
-		SetWindowLongPtrW(overlayWnd, GWL_EXSTYLE, exStyle);
-	}
+	bool m_visible = false;
+	bool m_moved = true;
+	bool m_sizeChanged = false;
+	ULONGLONG m_lastTopmost = 0;
 
-private:
 	static LRESULT CALLBACK WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam)
 	{
-		// Refuse activation on mouse clicks so Dota 2 keeps keyboard focus
-		// while the user interacts with ImGui.  Without this, clicking on
-		// the menu makes the overlay the foreground window and our "is game
-		// focused" check (plus Dota's input) would misbehave.
+		// Refuse activation on mouse clicks so Dota 2 keeps keyboard focus.
+		// (The overlay is permanently click-through anyway; this is a belt
+		// and braces no-activate guard.)
 		switch (msg)
 		{
 		case WM_MOUSEACTIVATE:
 			return MA_NOACTIVATE;
 		case WM_ACTIVATE:
 			if (LOWORD(wParam) != WA_INACTIVE) {
-				// If we somehow did get activated (e.g. via Alt), immediately
-				// yield focus back to the game window.
 				if (Overlay* self = reinterpret_cast<Overlay*>(GetWindowLongPtrW(hWnd, GWLP_USERDATA))) {
 					if (IsWindow(self->gameWnd))
 						SetForegroundWindow(self->gameWnd);
@@ -245,6 +250,9 @@ private:
 				return 0;
 			}
 			break;
+		case WM_DESTROY:
+			PostQuitMessage(0);
+			return 0;
 		}
 
 		if (ImGui_ImplWin32_WndProcHandler(hWnd, msg, wParam, lParam))
@@ -303,7 +311,7 @@ private:
 
 	void ResizeSwapChain()
 	{
-		if (!swapChain) return;
+		if (!swapChain || width <= 0 || height <= 0) return;
 		CleanupRenderTarget();
 		swapChain->ResizeBuffers(0, width, height, DXGI_FORMAT_UNKNOWN, 0);
 		CreateRenderTarget();

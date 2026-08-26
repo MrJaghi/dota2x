@@ -20,7 +20,7 @@ add_executable(AzhengESP
 # VERBATIM to hardcode offsets at compile time.
 target_include_directories(AzhengESP PRIVATE ${IMGUI_DIR} ${IMGUI_DIR}/backends ${CMAKE_SOURCE_DIR}/../output)
 
-target_link_libraries(AzhengESP PRIVATE user32 gdi32 d3d11 dxgi)
+target_link_libraries(AzhengESP PRIVATE user32 gdi32 d3d11 dxgi winmm)
 
 add_custom_command(TARGET AzhengESP POST_BUILD
 	COMMAND ${CMAKE_COMMAND} -E copy_directory

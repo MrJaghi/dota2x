@@ -1,6 +1,7 @@
 #pragma once
 #include "imgui.h"
 #include "Config.h"
+#include "Snapshot.h"
 #include <vector>
 #include <cstdio>
 #include <cmath>
@@ -23,8 +24,10 @@ public:
 	// ------------------------------------------------------------------
 	static void Draw(const EspSettings& cfg,
 		const EntityReader::ScanOutput& scan,
+		const LhFrame& lh,
 		const std::vector<Vector2>& rangeCircle,
-		float deltaTime) {
+		float deltaTime, float fps)
+	{
 		ImDrawList* draw = ImGui::GetBackgroundDrawList();
 		const float W = (float)ImGui::GetIO().DisplaySize.x;
 		const float H = (float)ImGui::GetIO().DisplaySize.y;
@@ -43,7 +46,8 @@ public:
 			for (const auto& m : scan.markers)
 				DrawMarker(draw, m, cfg);
 
-			for (const auto& c : scan.creeps)
+			// creep markers come from the high-rate last-hit engine
+			for (const auto& c : lh.creepMarkers)
 				DrawCreep(draw, c, cfg);
 
 			for (const auto& t : scan.heroes)
@@ -56,10 +60,13 @@ public:
 		if (cfg.showCastTracker || cfg.showJungleTracker || cfg.showRoshanLog)
 			DrawFeed(draw, scan, cfg, W, H);
 
+		if (cfg.showLastHitHud)
+			DrawLastHitHud(draw, lh, cfg);
+
 		if (cfg.showFps) {
-			char fps[32];
-			snprintf(fps, sizeof(fps), "FPS %d", (int)(deltaTime > 0.0f ? 1.0f / deltaTime : 0.0f));
-			draw->AddText(ImVec2(12, 10), Accent(cfg, 220), fps);
+			char fpsT[32];
+			snprintf(fpsT, sizeof(fpsT), "FPS %d", (int)(fps > 0.0f ? fps : (deltaTime > 0.0f ? 1.0f / deltaTime : 0.0f)));
+			draw->AddText(ImVec2(12, 10), Accent(cfg, 220), fpsT);
 		}
 		if (cfg.showWatermark) {
 			const char* wm = "DRAGONBURN  |  read-only";
@@ -209,33 +216,80 @@ private:
 	}
 
 	// ------------------------------------------------------------------
+	// Creep marker fed by the high-rate last-hit engine:
+	//   red   = kill it NOW (HP <= effective min damage)
+	//   yellow = killable soon (countdown = predicted seconds)
+	//   blue  = deny NOW / dim blue = deny soon
+	// ------------------------------------------------------------------
 	static void DrawCreep(ImDrawList* draw, const CreepTarget& c, const EspSettings& cfg) {
 		if (!cfg.showLastHitHelper)
 			return;
-		if (!c.isKillableNow && !c.isKillableSoon && !c.isDenyable)
+		if (!c.isKillableNow && !c.isKillableSoon && !c.isDenyable && !c.isDenySoon)
 			return;
 
+		bool now = c.isKillableNow || c.isDenyable;
 		ImU32 color = c.isKillableNow ? IM_COL32(255, 60, 60, 255)
 			: c.isDenyable ? IM_COL32(120, 170, 255, 255)
-			: IM_COL32(255, 200, 0, 255);
+			: (c.isKillableSoon ? IM_COL32(255, 200, 0, 255) : IM_COL32(110, 140, 210, 200));
 
-		DrawGlowRect(draw, c.x, c.y, c.w, c.h, color, 2.0f, true, c.isKillableNow);
+		DrawGlowRect(draw, c.x, c.y, c.w, c.h, color, 2.0f, true, now && !c.isDenyable);
 
-		// announce text is a separate toggle (OFF by default)
+		// label: announce text, countdown, or damage needed
+		char label[48];
+		label[0] = 0;
 		if (cfg.showLastHitAnnounce) {
-			const char* text = c.isKillableNow ? "LAST HIT" : (c.isDenyable ? "DENY" : "SOON");
-			ImVec2 tsz = CalcTextSizeCached(text);
+			const char* text = c.isKillableNow ? "LAST HIT" : (c.isDenyable ? "DENY" : "");
+			if (text[0]) snprintf(label, sizeof(label), "%s", text);
+		}
+		if (label[0] == 0 && cfg.showLastHitCountdown && (c.isKillableSoon || c.isDenySoon)) {
+			if (c.secondsToReady < 9.95f)
+				snprintf(label, sizeof(label), "%.1fs", c.secondsToReady);
+		}
+		if (label[0]) {
+			ImVec2 tsz = CalcTextSizeCached(label);
 			float tx = c.x + c.w * 0.5f - tsz.x * 0.5f;
-			float ty = c.y - tsz.y - 5;
+			float ty = c.y - tsz.y - 5.0f;
 			draw->AddRectFilled(ImVec2(tx - 4, ty - 2), ImVec2(tx + tsz.x + 4, ty + tsz.y + 2),
 				IM_COL32(0, 0, 0, 180), 4.0f);
-			draw->AddText(ImVec2(tx, ty), color, text);
+			draw->AddText(ImVec2(tx, ty), color, label);
 		}
 
 		// mini hp bar
-		float pct = (float)c.health / (float)c.maxHealth;
+		float pct = c.maxHealth > 0 ? (float)c.health / (float)c.maxHealth : 0.0f;
 		DrawBar(draw, c.x + c.w * 0.5f, c.y - 7, c.w > 40 ? 40 : c.w, 3.5f, pct,
 			c.isAlly ? IM_COL32(120, 170, 255, 255) : HealthColor(pct), 0);
+	}
+
+	// ------------------------------------------------------------------
+	// Compact one-line live status of the last-hit engine (bottom-left),
+	// so it is always visible WHY the engine does or does not act.
+	// ------------------------------------------------------------------
+	static void DrawLastHitHud(ImDrawList* draw, const LhFrame& lh, const EspSettings& cfg) {
+		const LastHitStats& st = lh.stats;
+		if (!st.tracking)
+			return;
+
+		char line[128];
+		int ready = 0, soon = 0;
+		for (const auto& c : lh.creepMarkers) {
+			if (c.isKillableNow || c.isDenyable) ready++;
+			else if (c.isKillableSoon || c.isDenySoon) soon++;
+		}
+
+		char lat[24];
+		if (st.latencySamples > 0)
+			snprintf(lat, sizeof(lat), " | %dms", (int)(st.latencyMs + 0.5f));
+		else
+			lat[0] = 0;
+		snprintf(line, sizeof(line), "LH %s | %d-%d dmg | ready %d soon %d | %d creeps%s",
+			st.active ? "ACTIVE" : (cfg.autoLastHit ? "armed" : "off"),
+			st.dmgMin, st.dmgMax, ready, soon, st.tracked, lat);
+
+		ImVec2 sz = CalcTextSizeCached(line);
+		float x = 12.0f, y = 30.0f;
+		draw->AddRectFilled(ImVec2(x - 6, y - 3), ImVec2(x + sz.x + 6, y + sz.y + 3),
+			IM_COL32(8, 10, 16, 160), 5.0f);
+		draw->AddText(ImVec2(x, y), st.active ? IM_COL32(120, 255, 140, 235) : IM_COL32(200, 210, 225, 190), line);
 	}
 
 	// ------------------------------------------------------------------

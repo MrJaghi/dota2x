@@ -62,19 +62,27 @@ struct EspSettings {
 
 	// --- Last Hit helper ---
 	bool showLastHitHelper = true;  // colored markers on killable creeps
+	bool showLastHitCountdown = true; // "0.42s" time-to-killable tags
 	bool showLastHitAnnounce = false; // "LAST HIT"/"DENY" text -- OFF per request
+	bool showLastHitHud = true;     // compact live status line (dmg/latency/ready)
 	bool autoLastHit = false;       // hold trigger key: auto last-hit + deny
+	bool autoDeny = true;           // auto-denies in addition to last-hits
+	bool lhNeutrals = false;        // also last-hit neutral camps (jungle)
+	bool lhRestoreCursor = true;    // put the cursor back after each auto click
 	int  triggerKey = 'X';          // key that activates auto last-hit/deny
 	int  attackKey = 'A';           // the Dota 2 "Attack" bind we tap
 	bool lastHitPriority = true;    // true: last-hit beats deny when both up
+	int  lhDamageMode = 0;          // 0 = safe (min damage roll), 1 = normal (avg)
 	float denyPct = 50.0f;          // ally creep HP% below which deny is possible
-	float clickCooldown = 0.30f;    // seconds between auto attack actions
+	float attackInterval = 0.70f;   // min seconds between two attack commands
+	float lhWindow = 1.20f;         // prediction horizon (seconds)
+	float lhTrackRate = 100.0f;     // creep HP tracking rate (Hz)
 
 	// --- Misc ---
 	bool showFps = true;
 	bool showWatermark = true;
 	float ghostFadeTime = 15.0f;    // seconds to keep last-known markers (hard cap)
-	float scanRate = 30.0f;         // memory scans per second (perf)
+	float scanRate = 60.0f;         // full entity scans per second (perf)
 	float itemRefreshInterval = 1.0f; // seconds between inventory re-reads
 
 	// --- Theme accent (Settings tab presets) ---
@@ -99,16 +107,49 @@ struct EspTarget {
 	int itemCount = 0;
 };
 
+// Creep marker, produced at HIGH RATE (lhTrackRate) by the last-hit engine --
+// not by the slow entity scan -- so countdowns and "kill now" flags are fresh.
 struct CreepTarget {
 	uintptr_t id = 0;
 	float x = 0, y = 0, w = 0, h = 0;
 	int health = 0, maxHealth = 0;
 	float distance = 0;
-	bool isKillableNow = false;
-	bool isKillableSoon = false;
-	bool isDenyable = false;
+	bool isKillableNow = false;     // HP <= effective damage -> hit it NOW
+	bool isKillableSoon = false;    // predicted killable within lhWindow
+	bool isDenyable = false;        // ally creep, deny-ready NOW
+	bool isDenySoon = false;        // ally creep, deny-ready soon
 	bool isAlly = false;
+	float secondsToReady = 0.0f;    // countdown for the "soon" markers
+	int killDamage = 0;             // effective min damage vs this creep
 	FixedStr<40> name;
+};
+
+// One lane/neutral creep near the local hero, published by the slow scan for
+// the last-hit engine to track at high frequency.
+struct CreepCacheEntry {
+	uintptr_t entity = 0;
+	bool isAlly = false;
+	bool isNeutral = false;
+	int maxHealth = 0;
+	float armor = 0.0f;
+	float hullRadius = 24.0f;
+};
+
+// Live counters of the last-hit engine (shown in the menu + HUD).
+struct LastHitStats {
+	int kills = 0;          // confirmed last-hits by the engine
+	int denies = 0;         // confirmed denies
+	int attempts = 0;       // attack commands sent
+	int aborts = 0;         // commands aborted by the final safety re-check
+	float latencyMs = 0.0f; // calibrated click -> damage-impact latency
+	int latencySamples = 0;
+	int tracked = 0;        // creeps currently tracked
+	float tickHz = 0.0f;    // real tracking rate
+	bool tracking = false;  // local hero + creeps are being tracked
+	bool active = false;    // trigger held and automation armed
+	int dmgMin = 0, dmgMax = 0;
+	float range = 0.0f;
+	bool heroValid = false;
 };
 
 enum MarkerKind : int {

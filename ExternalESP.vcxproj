@@ -86,6 +86,9 @@
     <ClInclude Include="esp\EntityLayout.h" />
     <ClInclude Include="esp\EntityReader.h" />
     <ClInclude Include="esp\EspRenderer.h" />
+    <ClInclude Include="esp\InputRouter.h" />
+    <ClInclude Include="esp\LastHitEngine.h" />
+    <ClInclude Include="esp\Snapshot.h" />
     <ClInclude Include="esp\VectorMath.h" />
     <ClInclude Include="esp\Memory.h" />
     <ClInclude Include="esp\Offsets.h" />

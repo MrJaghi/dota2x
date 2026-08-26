@@ -5,8 +5,14 @@
 #endif
 
 #include <Windows.h>
+#include <timeapi.h>
 #include <vector>
 #include <cstdio>
+#include <thread>
+#include <mutex>
+#include <atomic>
+
+#pragma comment(lib, "winmm.lib")
 
 #include "Memory.h"
 #include "VectorMath.h"
@@ -18,49 +24,28 @@
 #include "EntityReader.h"
 #include "EspRenderer.h"
 #include "UiManager.h"
+#include "Snapshot.h"
+#include "InputRouter.h"
+#include "LastHitEngine.h"
 
 // ---------------------------------------------------------------------------
-// Input simulation for the auto last-hit / deny helper.
-// The kernel driver and game memory stay 100% read-only -- automation is
-// performed exclusively with SendInput in our own process.
+// Architecture (see Snapshot.h):
+//
+//   render thread (here)  : menu + ESP drawing only. NO memory reads, NO
+//                           Sleep() calls, NO per-frame Win32 window work.
+//                           -> constant high FPS, cursor never lags.
+//   scan thread           : full entity scan at settings.scanRate (default
+//                           60 Hz): heroes, wards, roshan, runes, trackers.
+//   last-hit thread       : creep HP tracking at settings.lhTrackRate
+//                           (default 100 Hz) + prediction + attack timing +
+//                           SendInput automation (its Sleeps live here, not
+//                           in the render loop).
+//
+// Input: the overlay window is permanently click-through. While the menu is
+// open, InputRouter routes clicks over the menu panel into ImGui and lets
+// EVERYTHING else through to the game. There is no global input block
+// anymore -- the mouse always moves.
 // ---------------------------------------------------------------------------
-namespace InputSim {
-	static void TapKey(WORD vk) {
-		INPUT in[2] = {};
-		in[0].type = INPUT_KEYBOARD;
-		in[0].ki.wVk = vk;
-		in[1].type = INPUT_KEYBOARD;
-		in[1].ki.wVk = vk;
-		in[1].ki.dwFlags = KEYEVENTF_KEYUP;
-		SendInput(2, in, sizeof(INPUT));
-	}
-
-	static void MoveMouseAbs(int x, int y) {
-		INPUT in = {};
-		in.type = INPUT_MOUSE;
-		in.mi.dwFlags = MOUSEEVENTF_MOVE | MOUSEEVENTF_ABSOLUTE;
-		in.mi.dx = (LONG)((x * 65535) / (GetSystemMetrics(SM_CXSCREEN) - 1));
-		in.mi.dy = (LONG)((y * 65535) / (GetSystemMetrics(SM_CYSCREEN) - 1));
-		SendInput(1, &in, sizeof(INPUT));
-	}
-
-	static void ClickLeft() {
-		INPUT in[2] = {};
-		in[0].type = INPUT_MOUSE;
-		in[0].mi.dwFlags = MOUSEEVENTF_LEFTDOWN;
-		in[1].type = INPUT_MOUSE;
-		in[1].mi.dwFlags = MOUSEEVENTF_LEFTUP;
-		SendInput(2, in, sizeof(INPUT));
-	}
-}
-
-// ---------------------------------------------------------------------------
-// Damage variance: Dota 2 applies +/- 10% base damage random on creeps.
-// We use the conservative (low) estimate so we don't miss last-hits.
-// ---------------------------------------------------------------------------
-static float ConservativeDamage(float avgDamage) {
-	return avgDamage * 0.9f;
-}
 
 class GameClient {
 private:
@@ -68,20 +53,27 @@ private:
 	Overlay overlay;
 	EspSettings settings;
 
+	Snapshot snap;
 	EntityReader::ScanState scanState;
-	EntityReader::ScanOutput scanOut;
-	std::vector<Vector2> rangeCirclePts;
+	std::thread scanThread;
+	std::thread lhThread;
+	std::atomic<bool> workersRunning{ false };
+
+	LastHit::Engine lhEngine;
 
 	bool menuOpen = false;
 	bool insertWasDown = false;
-	bool triggerWasDown = false;
-	float clickGate = 0.0f;      // earliest time the auto-helper may act again
-	float nowSec = 0.0f;
+	float fpsEMA = 60.0f;
 	ULONGLONG startTick = 0;
-	ULONGLONG lastScanTick = 0;
 	ULONGLONG lastLayoutProbe = 0;
 
 public:
+	~GameClient() {
+		StopWorkers();
+		InputRouter::Detach();
+		overlay.Shutdown();
+	}
+
 	bool Initialize() {
 		printf("[*] DragonBurn External ESP -- waiting for Dota 2 process...\n");
 		printf("[*] Waiting for Dota 2...\n");
@@ -100,39 +92,59 @@ public:
 		OffsetValidator::ValidateAll(memory);
 
 		UiManager::ApplyTheme();
+		printf("[+] Input: overlay is always click-through; the menu only routes\n"
+			"    clicks that land on its own panel. The game mouse is never blocked.\n");
+		printf("[+] Tip: hold [%c] for auto last-hit. Avoid the TAB key -- Dota 2\n"
+			"    opens the scoreboard on TAB and eats generated attack clicks.\n",
+			(char)settings.triggerKey);
 
 		startTick = GetTickCount64();
+
+		workersRunning = true;
+		scanThread = std::thread([this] { ScanWorker(); });
+		lhThread = std::thread([this] { LhWorker(); });
+		printf("[+] Threads started: render | entity scan (%.0f Hz) | last-hit (%.0f Hz)\n",
+			settings.scanRate, settings.lhTrackRate);
 		return true;
 	}
 
+	void StopWorkers() {
+		workersRunning = false;
+		if (scanThread.joinable()) scanThread.join();
+		if (lhThread.joinable()) lhThread.join();
+	}
+
 	void Run() {
-		bool wasFocused = true;
+		bool cleared = false;
 		while (memory.IsProcessAlive()) {
 			overlay.PumpMessages();
 			overlay.SyncWithGameWindow();
 
-			bool focused = overlay.IsGameFocused();
+			snap.clientX.store(overlay.clientOriginX);
+			snap.clientY.store(overlay.clientOriginY);
+
 			HandleInput();
 
-			if (focused) {
-				nowSec = (GetTickCount64() - startTick) / 1000.0f;
-				Update();
-				AutoLastHitTick();
+			if (overlay.IsGameFocused()) {
+				cleared = false;
 				Render();
 			} else {
-				scanOut.heroes.clear();
-				scanOut.creeps.clear();
-				scanOut.markers.clear();
-				scanOut.ghostList.clear();
-				if (wasFocused) {
+				if (menuOpen) { // never leave a menu up over another app
+					menuOpen = false;
+					InputRouter::Detach();
+					UiManager::menuVisible = false;
+				}
+				if (!cleared) {
 					overlay.BeginFrame();
 					overlay.EndFrameAndPresent();
+					cleared = true;
 				}
-				Sleep(5);
+				Sleep(15);
 			}
-			wasFocused = focused;
 		}
 
+		StopWorkers();
+		InputRouter::Detach();
 		overlay.Shutdown();
 		printf("[!] Dota 2 closed.\n");
 	}
@@ -144,129 +156,145 @@ private:
 		bool toggleKeyDown = gameFocused && (GetAsyncKeyState(VK_INSERT) & 0x8000) != 0;
 		if (toggleKeyDown && !insertWasDown) {
 			menuOpen = !menuOpen;
-			overlay.SetClickable(menuOpen);
+			if (menuOpen)
+				InputRouter::Attach(overlay.overlayWnd);
+			else {
+				InputRouter::Detach();
+				UiManager::menuVisible = false;
+			}
 		}
 		insertWasDown = toggleKeyDown;
 
 		if (menuOpen && !gameFocused) {
 			menuOpen = false;
-			overlay.SetClickable(false);
+			InputRouter::Detach();
+			UiManager::menuVisible = false;
 		}
 	}
 
 	// ------------------------------------------------------------------
-	// Memory scan, throttled to settings.scanRate (default 30 Hz). Rendering
-	// still happens every frame using the last scan results.
+	// Entity scan thread: heroes / wards / roshan / runes / trackers and the
+	// creep cache for the last-hit engine. Runs at settings.scanRate.
 	// ------------------------------------------------------------------
-	void Update() {
-		ULONGLONG now = GetTickCount64();
-		float interval = 1000.0f / (settings.scanRate > 1.0f ? settings.scanRate : 30.0f);
-		if (now - lastScanTick < (ULONGLONG)interval)
-			return;
-		lastScanTick = now;
+	void ScanWorker() {
+		SetThreadPriority(GetCurrentThread(), THREAD_PRIORITY_BELOW_NORMAL);
+		EntityReader::ScanOutput localOut;
+		ULONGLONG lastScan = 0;
 
-		uintptr_t entitySystem = memory.Read<uintptr_t>(memory.clientDllBase + offsets::client_dll::dwEntityList);
-		if (!entitySystem)
-			return;
-
-		// keep retrying the layout probe while the ESP started in the main menu
-		if (!EntityLayout::Detected() && now - lastLayoutProbe > 2000) {
-			lastLayoutProbe = now;
-			EntityLayout::Detect(memory, entitySystem);
-		}
-
-		scanState.now = nowSec;
-		EntityReader::ReadChunkPointers(memory, entitySystem, scanState);
-		EntityReader::RefreshLocal(memory, scanState);
-		if (!scanState.localValid)
-			return;
-
-		ViewMatrix vm = memory.Read<ViewMatrix>(memory.clientDllBase + offsets::client_dll::dwViewMatrix);
-		EntityReader::ScanAll(memory, scanState, settings, vm, overlay.width, overlay.height, scanOut);
-
-		if (settings.showAttackRange)
-			EntityReader::BuildRangeCircle(scanState, scanState.local.attackRange,
-				vm, overlay.width, overlay.height, rangeCirclePts);
-		else
-			rangeCirclePts.clear();
-	}
-
-	// ------------------------------------------------------------------
-	// Auto last-hit + deny (hold trigger key). Priority is configurable:
-	// by default a last-hit always beats a deny when both are possible.
-	//
-	// The target selection uses conservative damage (low-roll) to avoid
-	// missing last-hits, and sorts by distance so we hit the closest
-	// eligible creep first.
-	// ------------------------------------------------------------------
-	void AutoLastHitTick() {
-		if (!settings.autoLastHit || menuOpen || !scanState.localValid)
-			return;
-
-		bool down = (GetAsyncKeyState(settings.triggerKey) & 0x8000) != 0;
-		bool pressed = down && !triggerWasDown;
-		triggerWasDown = down;
-		if (!down)
-			return;
-
-		if (!pressed && nowSec < clickGate)
-			return;
-
-		const CreepTarget* best = nullptr;
-		float bestDist = 1e9f;
-
-		// pass 1: preferred action, pass 2: fallback action
-		for (int pass = 0; pass < 2 && !best; pass++) {
-			bool wantKill = settings.lastHitPriority ? (pass == 0) : (pass == 1);
-			for (const auto& c : scanOut.creeps) {
-				bool eligible = false;
-				if (wantKill) {
-					// Use conservative (low-roll) damage to avoid mistiming
-					float cdmg = ConservativeDamage(scanState.local.damage);
-					eligible = c.isKillableNow || (cdmg > 0 && c.health > 0 && c.health <= (int)(cdmg * 1.05f));
-				} else {
-					eligible = c.isDenyable;
-				}
-				if (!eligible || c.distance >= bestDist)
-					continue;
-				best = &c;
-				bestDist = c.distance;
+		while (workersRunning.load() && memory.IsProcessAlive()) {
+			ULONGLONG now = GetTickCount64();
+			float rate = settings.scanRate;
+			if (rate < 5.0f) rate = 5.0f;
+			if (rate > 120.0f) rate = 120.0f;
+			if (now - lastScan < (ULONGLONG)(1000.0f / rate)) {
+				Sleep(2);
+				continue;
 			}
+			lastScan = now;
+
+			uintptr_t entitySystem = memory.Read<uintptr_t>(memory.clientDllBase + offsets::client_dll::dwEntityList);
+			if (!entitySystem) {
+				Sleep(50);
+				continue;
+			}
+
+			// keep retrying the layout probe while the ESP started in the
+			// main menu (no local pawn yet)
+			if (!EntityLayout::Detected() && now - lastLayoutProbe > 2000) {
+				lastLayoutProbe = now;
+				EntityLayout::Detect(memory, entitySystem);
+			}
+
+			ScanMeta meta;
+			meta.screenW = overlay.width;
+			meta.screenH = overlay.height;
+			scanState.now = (float)((now - startTick) / 1000.0);
+
+			EntityReader::ReadChunkPointers(memory, entitySystem, scanState);
+			EntityReader::RefreshLocal(memory, scanState);
+			meta.local = scanState.local;
+			meta.localValid = scanState.localValid;
+
+			if (!scanState.localValid) {
+				localOut.heroes.clear();
+				localOut.markers.clear();
+				localOut.ghostList.clear();
+				localOut.pingList.clear();
+				snap.PublishScan(std::move(localOut), std::move(meta));
+				continue;
+			}
+
+			ViewMatrix vm = memory.Read<ViewMatrix>(memory.clientDllBase + offsets::client_dll::dwViewMatrix);
+			meta.vm = vm;
+
+			EntityReader::ScanAll(memory, scanState, settings, vm, meta.screenW, meta.screenH, localOut);
+			meta.creeps = scanState.creepCache;
+
+			if (settings.showAttackRange && scanState.local.attackRange > 0.0f)
+				EntityReader::BuildRangeCircle(scanState, scanState.local.attackRange,
+					vm, meta.screenW, meta.screenH, meta.rangeCircle);
+
+			snap.PublishScan(std::move(localOut), std::move(meta));
 		}
-
-		if (!best)
-			return;
-
-		ExecuteAttack(*best);
-		clickGate = nowSec + settings.clickCooldown;
 	}
 
-	void ExecuteAttack(const CreepTarget& c) {
-		// tap the user's Dota 2 "Attack" bind to enter attack-targeting mode
-		InputSim::TapKey((WORD)settings.attackKey);
-		Sleep(30);
+	// ------------------------------------------------------------------
+	// Last-hit thread: high-rate creep tracking, prediction, calibrated
+	// attack timing and (while the trigger is held) the actual clicks.
+	// ------------------------------------------------------------------
+	void LhWorker() {
+		// Timing precision matters here: above-normal priority keeps the
+		// 100 Hz tracking steady even when the game hammers the CPU.
+		SetThreadPriority(GetCurrentThread(), THREAD_PRIORITY_ABOVE_NORMAL);
+		while (workersRunning.load() && memory.IsProcessAlive()) {
+			float t0 = LastHit::WallNow();
+			lhEngine.Tick(memory, snap, settings, overlay.IsGameFocused(), menuOpen);
 
-		// click the creep center (clamped away from screen edges to avoid camera pan)
-		int tx = (int)(c.x + c.w * 0.5f);
-		int ty = (int)(c.y + c.h * 0.5f);
-		tx = tx < 90 ? 90 : (tx > overlay.width - 90 ? overlay.width - 90 : tx);
-		ty = ty < 90 ? 90 : (ty > overlay.height - 90 ? overlay.height - 90 : ty);
-		InputSim::MoveMouseAbs(tx, ty);
-		Sleep(35);
-		InputSim::ClickLeft();
-		Sleep(10);
+			float rate = settings.lhTrackRate;
+			if (rate < 30.0f) rate = 30.0f;
+			if (rate > 200.0f) rate = 200.0f;
+			float target = t0 + 1.0f / rate;
+			while (LastHit::WallNow() < target && workersRunning.load())
+				Sleep(1);
+		}
 	}
 
+	// ------------------------------------------------------------------
+	// Render thread: pure drawing, nothing else.
 	// ------------------------------------------------------------------
 	void Render() {
+		// feed the live cursor position BEFORE NewFrame so hover states use
+		// this frame's position (events queued by the hook since the last
+		// frame are processed by BeginFrame -> ImGui::NewFrame)
+		InputRouter::NewFramePoll(overlay.overlayWnd);
 		overlay.BeginFrame();
 
 		float dt = ImGui::GetIO().DeltaTime;
-		EspRenderer::Draw(settings, scanOut, rangeCirclePts, dt);
+		float fps = dt > 0.0001f ? 1.0f / dt : 0.0f;
+		if (fps > 1.0f && fps < 1000.0f)
+			fpsEMA += (fps - fpsEMA) * 0.08f;
 
-		UiManager::menuVisible = menuOpen;
+		// local copies of the shared snapshot (short locks, then draw from
+		// our own buffers so the workers can never stall a frame)
+		EntityReader::ScanOutput localScan;
+		LhFrame localLh;
+		std::vector<Vector2> rangePts;
+		{
+			std::lock_guard<std::mutex> g1(snap.mxScan);
+			localScan = snap.scan;
+			rangePts = snap.meta.rangeCircle;
+		}
+		{
+			std::lock_guard<std::mutex> g2(snap.mxLh);
+			localLh = snap.lh;
+		}
+
+		EspRenderer::Draw(settings, localScan, localLh, rangePts, dt, fpsEMA);
+
 		if (menuOpen)
-			UiManager::DrawMenu(menuOpen, settings, dt);
+			UiManager::DrawMenu(menuOpen, settings, localLh.stats, fpsEMA);
+		else
+			InputRouter::SetMenuRect(0.0f, 0.0f, 0.0f, 0.0f, false);
 
 		overlay.EndFrameAndPresent();
 	}
@@ -287,6 +315,11 @@ int main() {
 	}
 
 	SetConsoleTitleA("DragonBurn External ESP");
+
+	// 1 ms Sleep resolution: the last-hit thread tick cadence and the click
+	// choreography (Sleep(6/14/16)) depend on accurate short sleeps.
+	// Without this, Windows rounds Sleep(1) up to ~15.6 ms.
+	timeBeginPeriod(1);
 
 	GameClient client;
 	// Run forever: if Dota 2 closes, detach, wait, re-attach.
