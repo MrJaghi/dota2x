@@ -1,6 +1,7 @@
 #pragma once
 #include "imgui.h"
 #include "Config.h"
+#include "InputRouter.h"
 #include <cstdio>
 #include <cmath>
 #include <unordered_map>
@@ -12,19 +13,24 @@
 //   [ tab pills row  Visuals | Players | World | Last Hit | Misc | Settings ]
 //   [ feature toggles panel ]   [ feature configuration panel ]
 // All widgets are custom-drawn for a clean rounded look and cheap rendering.
+//
+// Input model (new): the overlay window itself is permanently click-through.
+// InputRouter feeds mouse events into ImGui and only eats clicks that land on
+// this panel -- the game keeps receiving everything else (see InputRouter.h).
+// The menu deliberately uses NO popup widgets (no Combo/Select), so every
+// clickable pixel is inside the panel rectangle the router knows about.
 // ---------------------------------------------------------------------------
+
 class UiManager {
 public:
 	static ImFont* fontBold;
 
 	// live menu geometry (overlay client space == game screen space); the
-	// input blocker uses it so clicks outside the panel never reach the game
+	// input router uses it so clicks outside the panel still reach the game
 	static bool   menuVisible;
 	static ImVec2 menuPos;
 	static ImVec2 menuSize;
 
-	// true while a KeyBindRow waits for a key -- the input blocker must pass
-	// keyboard events through so GetAsyncKeyState can see them
 	static bool IsCapturingKey() { return s_waitingKey; }
 
 	// ------------------------------------------------------------------
@@ -81,10 +87,10 @@ public:
 	}
 
 	// ------------------------------------------------------------------
-	static void DrawMenu(bool& menuOpen, EspSettings& s, float fps) {
-		(void)fps;
+	static void DrawMenu(bool& menuOpen, EspSettings& s, const LastHitStats& st, float fps) {
 		ImGuiIO& io = ImGui::GetIO();
-		float dt = io.DeltaTime; if (dt <= 0.0f) dt = 1.0f / 60.0f;
+		float dt = io.DeltaTime;
+		if (dt <= 0.0f) dt = 1.0f / 60.0f;
 
 		// smooth accent color transitions
 		static float cur[3] = { -1.0f, -1.0f, -1.0f };
@@ -154,13 +160,13 @@ public:
 
 		ImGui::SameLine(0, 12.0f);
 		ImGui::BeginChild("##right", ImVec2(panelW, panelH), ImGuiChildFlags_Borders);
-		DrawRightPanel(s);
+		DrawRightPanel(s, st, fps);
 		ImGui::EndChild();
 		ImGui::PopStyleColor();
 
 		ImGui::Spacing();
 		ImGui::Separator();
-		ImGui::TextDisabled(" [INSERT] toggle menu    hold [%s] auto last-hit / deny    menu only while Dota 2 is focused",
+		ImGui::TextDisabled(" [INSERT] toggle menu    hold [%s] last-hit / deny    the game mouse is never captured",
 			KeyName(s.triggerKey));
 
 		// keep the panel inside the game window; remember position across opens
@@ -173,6 +179,9 @@ public:
 		menuVisible = true;
 		if (s_dragMoved)
 			SaveMenuPos(menuPos);
+
+		// tell the input router where the clickable panel lives
+		InputRouter::SetMenuRect(menuPos.x, menuPos.y, menuSize.x, menuSize.y, true);
 
 		PollKeyCapture();
 		ImGui::End();
@@ -253,6 +262,12 @@ private:
 		ImGui::PopStyleColor();
 	}
 
+	static void Warning(const char* t) {
+		ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1.0f, 0.62f, 0.25f, 1.0f));
+		ImGui::TextWrapped("! %s", t);
+		ImGui::PopStyleColor();
+	}
+
 	static void ToggleRow(const char* label, bool* v) {
 		ImVec2 p = ImGui::GetCursorScreenPos();
 		float rowH = ImGui::GetTextLineHeight() + 12.0f;
@@ -311,12 +326,27 @@ private:
 		ImGui::PopID();
 	}
 
-	static void ComboRow(const char* label, int* v, const char* const items[], int count) {
+	// Popup-free alternative to Combo: segmented buttons, so every clickable
+	// pixel stays inside the panel rectangle the input router knows about.
+	static void SegmentRow(const char* label, int* v, const char* const items[], int count) {
 		ImGui::TextUnformatted(label);
-		ImGui::PushID(label);
-		ImGui::SetNextItemWidth(ImGui::GetContentRegionAvail().x);
-		ImGui::Combo("##v", v, items, count);
-		ImGui::PopID();
+		ImGui::Spacing();
+		float width = ImGui::GetContentRegionAvail().x;
+		float bw = (width - (count - 1) * 6.0f) / (float)count;
+		for (int i = 0; i < count; i++) {
+			if (i) ImGui::SameLine(0.0f, 6.0f);
+			ImGui::PushID(i);
+			bool active = (*v == i);
+			if (active) {
+				ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.05f, 0.62f, 0.55f, 1.0f));
+				ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.04f, 0.08f, 0.10f, 1.0f));
+			}
+			if (ImGui::Button(items[i], ImVec2(bw, 0)) && !active)
+				*v = i;
+			if (active)
+				ImGui::PopStyleColor(2);
+			ImGui::PopID();
+		}
 	}
 
 	static const char* KeyName(int vk) {
@@ -346,7 +376,7 @@ private:
 	static void PollKeyCapture() {
 		if (!s_waitingKey)
 			return;
-		// The game window keeps keyboard focus (WS_EX_NOACTIVATE overlay), so
+		// The game window keeps keyboard focus (click-through overlay), so
 		// poll the global async state instead of ImGui's key map.
 		for (int vk = 0x08; vk < 0xFE; vk++) {
 			bool down = (GetAsyncKeyState(vk) & 0x8000) != 0;
@@ -476,11 +506,16 @@ private:
 			break;
 
 		case 3: Header("Last Hit");
-			Section("ASSISTANT  (read-only overlay)");
+			Section("MARKERS  (read-only overlay)");
 			ToggleRow("Last-Hit Markers", &s.showLastHitHelper);
+			ToggleRow("Countdown Tags", &s.showLastHitCountdown);
 			ToggleRow("Announce Text", &s.showLastHitAnnounce);
+			ToggleRow("Status HUD", &s.showLastHitHud);
 			Section("AUTOMATION  (input only, no writes)");
-			ToggleRow("Auto Last-Hit + Deny", &s.autoLastHit);
+			ToggleRow("Auto Last-Hit", &s.autoLastHit);
+			ToggleRow("Auto Deny", &s.autoDeny);
+			ToggleRow("Include Neutrals", &s.lhNeutrals);
+			ToggleRow("Restore Cursor", &s.lhRestoreCursor);
 			break;
 
 		case 4: Header("Misc");
@@ -492,6 +527,7 @@ private:
 			InfoRow("Build", "External read-only ESP");
 			InfoRow("Memory access", "ReadProcessMemory");
 			InfoRow("Game writes", "none");
+			InfoRow("Mouse blocking", "none -- clicks pass through");
 			ImGui::Spacing();
 			if (ImGui::Button("Reset all settings", ImVec2(-1, 0)))
 				s = EspSettings{};
@@ -500,7 +536,7 @@ private:
 	}
 
 	// ------------------------------------------------------------------
-	static void DrawRightPanel(EspSettings& s) {
+	static void DrawRightPanel(EspSettings& s, const LastHitStats& st, float fps) {
 		switch (s_tab) {
 		case 0: Header("Visuals Configuration");
 			SliderRow("Box Thickness", &s.boxThickness, 1.0f, 4.0f, "%.1f");
@@ -520,33 +556,66 @@ private:
 			Note("Heroes that leave your vision stay on the map as 'HERE Xs AGO' markers and vanish after this many seconds until they show up again. Cast, jungle and Roshan trackers read the networked activity state of enemy heroes.");
 			break;
 
-		case 3: Header("Last Hit Configuration");
+		case 3: {
+			Header("Last Hit Configuration");
 			KeyBindRow("Trigger Key (hold)", &s.triggerKey);
+			if (s.triggerKey == VK_TAB)
+				Warning("TAB opens the Dota 2 scoreboard -- while it is up, generated attack clicks hit the scoreboard instead of the creep. Bind a free key (X, C, V, Z...).");
 			ImGui::Spacing();
 			KeyBindRow("Attack Key (your Dota bind)", &s.attackKey);
+			if (s.attackKey == VK_TAB)
+				Warning("TAB is the scoreboard key: the game will open the scoreboard instead of entering attack mode. Bind the real Dota 2 'Attack' key (default A).");
 			ImGui::Spacing();
-		{
-			static const char* prio[] = { "Last-Hit first", "Deny first" };
-			int p = s.lastHitPriority ? 0 : 1;
-			ComboRow("Priority", &p, prio, 2);
-			s.lastHitPriority = (p == 0);
-		}
-		ImGui::Spacing();
+			{
+				static const char* prio[] = { "Last-Hit first", "Deny first" };
+				int p = s.lastHitPriority ? 0 : 1;
+				SegmentRow("Priority", &p, prio, 2);
+				s.lastHitPriority = (p == 0);
+			}
+			ImGui::Spacing();
+			{
+				static const char* dmg[] = { "Safe (min roll)", "Normal (avg)" };
+				SegmentRow("Damage Roll", &s.lhDamageMode, dmg, 2);
+			}
+			ImGui::Spacing();
 			SliderRow("Deny Threshold (%)", &s.denyPct, 10.0f, 90.0f, "%.0f");
-			SliderRow("Click Cooldown (s)", &s.clickCooldown, 0.10f, 1.0f, "%.2f");
+			SliderRow("Attack Interval (s)", &s.attackInterval, 0.15f, 1.5f, "%.2f");
+			SliderRow("Prediction Window (s)", &s.lhWindow, 0.4f, 2.5f, "%.2f");
+			SliderRow("Track Rate (Hz)", &s.lhTrackRate, 30.0f, 200.0f, "%.0f");
+			Section("ENGINE STATUS");
+			char buf[64];
+			snprintf(buf, sizeof(buf), "%d", st.kills);            InfoRow("Confirmed last-hits", buf);
+			snprintf(buf, sizeof(buf), "%d", st.denies);           InfoRow("Confirmed denies", buf);
+			snprintf(buf, sizeof(buf), "%d / %d", st.attempts, st.aborts); InfoRow("Commands / aborts", buf);
+			if (st.latencySamples > 0)
+				snprintf(buf, sizeof(buf), "%.0f ms (%d samples)", st.latencyMs, st.latencySamples);
+			else
+				snprintf(buf, sizeof(buf), "calibrating...");
+			InfoRow("Impact latency", buf);
+			snprintf(buf, sizeof(buf), "%d creeps @ %.0f Hz", st.tracked, st.tickHz);
+			InfoRow("Tracking", buf);
+			if (st.heroValid)
+				snprintf(buf, sizeof(buf), "%d-%d dmg, %.0f range", st.dmgMin, st.dmgMax, st.range);
+			else
+				snprintf(buf, sizeof(buf), "no hero");
+			InfoRow("Local hero", buf);
 			ImGui::Spacing();
-			Note("Hold the trigger key: the ESP taps your Attack key and clicks the best creep for you. When a last-hit and a deny are possible at the same time, the Priority setting decides.");
+			Note("Hold the trigger key and the engine times the hit itself: it predicts each creep's HP (armor included), knows your windup/projectile delay from live calibration, and only clicks when the damage will land exactly on the kill threshold. Marker countdowns show when a creep becomes hittable.");
 			break;
+		}
 
 		case 4: Header("Misc Configuration");
-			SliderRow("Scan Rate (Hz)", &s.scanRate, 10.0f, 60.0f, "%.0f");
+			SliderRow("Scan Rate (Hz)", &s.scanRate, 10.0f, 120.0f, "%.0f");
 			ImGui::Spacing();
-			Note("Lower the scan rate to reduce CPU usage. Rendering always runs at full frame rate; memory scans are throttled separately.");
+			Note("Entity scans run on their own thread at this rate; creep HP tracking for last-hits runs separately (and faster) via Track Rate. Rendering always runs at full frame rate.");
 			break;
 
 		case 5: Header("Accent Color");
 			AccentPresets(s);
 			ImGui::Spacing();
+			char buf[32];
+			snprintf(buf, sizeof(buf), "%.0f", fps);
+			InfoRow("Render FPS", buf);
 			Note("The accent color is used by the menu and by ESP glow / markers.");
 			break;
 		}

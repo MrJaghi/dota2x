@@ -28,6 +28,7 @@ namespace offsets
 	namespace client_dll {
 		constexpr std::ptrdiff_t dwEntityList = dota2_dumper::offsets::client_dll::dwEntityList;
 		constexpr std::ptrdiff_t dwViewMatrix = dota2_dumper::offsets::client_dll::dwViewMatrix;
+		constexpr std::ptrdiff_t dwGlobalVars = dota2_dumper::offsets::client_dll::dwGlobalVars;
 	}
 
 	// Entity-system layout. These are stable Source 2 engine constants that
@@ -69,6 +70,15 @@ namespace offsets
 		constexpr std::ptrdiff_t m_Inventory         = dota2_dumper::schemas::client_dll::C_DOTA_BaseNPC::m_Inventory;
 		constexpr std::ptrdiff_t m_NetworkActivity   = dota2_dumper::schemas::client_dll::C_DOTA_BaseNPC::m_NetworkActivity;
 		constexpr std::ptrdiff_t m_bIsNeutralUnitType = dota2_dumper::schemas::client_dll::C_DOTA_BaseNPC::m_bIsNeutralUnitType;
+
+		// --- last-hit engine fields (all read-only) ---
+		constexpr std::ptrdiff_t m_flPhysicalArmorValue = dota2_dumper::schemas::client_dll::C_DOTA_BaseNPC::m_flPhysicalArmorValue;
+		constexpr std::ptrdiff_t m_iAttackCapabilities  = dota2_dumper::schemas::client_dll::C_DOTA_BaseNPC::m_iAttackCapabilities;
+		constexpr std::ptrdiff_t m_flBaseAttackTime     = dota2_dumper::schemas::client_dll::C_DOTA_BaseNPC::m_flBaseAttackTime;
+		constexpr std::ptrdiff_t m_flHullRadius         = dota2_dumper::schemas::client_dll::C_DOTA_BaseNPC::m_flHullRadius;
+		constexpr std::ptrdiff_t m_flLastAttackTime     = dota2_dumper::schemas::client_dll::C_DOTA_BaseNPC::m_flLastAttackTime;
+		constexpr std::ptrdiff_t m_flLastDamageTime     = dota2_dumper::schemas::client_dll::C_DOTA_BaseNPC::m_flLastDamageTime;
+		constexpr std::ptrdiff_t m_flDeathTime          = dota2_dumper::schemas::client_dll::C_DOTA_BaseNPC::m_flDeathTime;
 	}
 
 	namespace C_DOTA_UnitInventory {

@@ -63,6 +63,7 @@ public:
 		std::unordered_map<uintptr_t, GhostTarget> ghosts;     // last-known heroes
 		std::unordered_map<uintptr_t, float> itemRefresh;      // key: hero ptr
 		std::vector<Vector3> neutralPts;                       // jungle camps this scan
+		std::vector<CreepCacheEntry> creepCache;               // creeps near the hero
 		std::unordered_map<uintptr_t, int> prevActivity;       // key: hero ptr
 		std::unordered_map<uintptr_t, Ping> pings;             // active pings, key: hero ptr
 		std::unordered_map<uintptr_t, float> eventGate;        // feed throttle
@@ -379,13 +380,45 @@ public:
 
 	struct ScanOutput {
 		std::vector<EspTarget> heroes;
-		std::vector<CreepTarget> creeps;
 		std::vector<MarkerTarget> markers;
 		std::vector<GhostTarget> ghostList;
 		std::vector<Ping> pingList;
 		std::vector<FeedEvent> feed;
 		float now = 0.0f;
 	};
+
+	// ------------------------------------------------------------------
+	// Register a lane/neutral creep for the last-hit engine. The engine
+	// tracks these at HIGH frequency on its own thread; this cache only
+	// tells it WHICH entities are creeps (classification is the expensive
+	// part, HP polling is cheap).
+	// ------------------------------------------------------------------
+	static void AddCreepToCache(const Memory& mem, ScanState& st, uintptr_t entity,
+		const LocalState& L, const Vector3& origin, bool neutral)
+	{
+		if (st.creepCache.size() >= 64)
+			return;
+		float dx = origin.x - L.origin.x, dy = origin.y - L.origin.y;
+		float radius = L.attackRange > 0.0f ? (L.attackRange + 900.0f) : 1700.0f;
+		if (radius < 1700.0f) radius = 1700.0f;
+		if (dx * dx + dy * dy > radius * radius)
+			return;
+
+		int hp = mem.Read<int>(entity + offsets::C_BaseEntity::m_iHealth);
+		int maxHp = mem.Read<int>(entity + offsets::C_BaseEntity::m_iMaxHealth);
+		if (hp <= 0 || maxHp <= 0)
+			return;
+
+		CreepCacheEntry e;
+		e.entity = entity;
+		e.isAlly = (mem.Read<uint8_t>(entity + offsets::C_BaseEntity::m_iTeamNum) == L.team);
+		e.isNeutral = neutral;
+		e.maxHealth = maxHp;
+		e.armor = mem.Read<float>(entity + offsets::C_DOTA_BaseNPC::m_flPhysicalArmorValue);
+		float hull = mem.Read<float>(entity + offsets::C_DOTA_BaseNPC::m_flHullRadius);
+		e.hullRadius = (hull > 1.0f && hull < 200.0f) ? hull : 24.0f;
+		st.creepCache.push_back(e);
+	}
 
 	// ------------------------------------------------------------------
 	// THE single-pass scan.
@@ -395,13 +428,13 @@ public:
 		ScanOutput& out) {
 
 		out.heroes.clear();
-		out.creeps.clear();
 		out.markers.clear();
 		out.ghostList.clear();
 		out.pingList.clear();
 		out.feed = st.feed;
 		out.now = st.now;
 		st.neutralPts.clear();
+		st.creepCache.clear();
 
 		const LocalState& L = st.local;
 		const float maxDistSq = s.maxDrawDistance * s.maxDrawDistance;
@@ -530,7 +563,12 @@ public:
 					PrettyName(name, 14, t.name.buf, 28);
 
 					if (s.showPlayerNames && enemy) {
-						uintptr_t owner = mem.Read<uintptr_t>(entity + offsets::C_BaseEntity::m_hOwnerEntity);
+						// m_hOwnerEntity is a CHandle (entity INDEX), not a
+						// pointer. The old code read the raw handle value as a
+						// pointer -> player names never resolved. Resolve it
+						// through the entity list like every other handle.
+						uint32_t ownerH = mem.Read<uint32_t>(entity + offsets::C_BaseEntity::m_hOwnerEntity);
+						uintptr_t owner = ResolveHandle(st, (int)(ownerH & 0x7FFF));
 						if (owner > 0x10000ull) {
 							char pn[24] = {};
 							if (mem.ReadRaw(owner + offsets::CBasePlayerController::m_iszPlayerName, pn, sizeof(pn) - 1)
@@ -551,71 +589,27 @@ public:
 					continue;
 				}
 
-				// ---------------- CREEP / BUILDING ----------------
-				if (strstr(name, "creep") || strstr(name, "building")) {
-					if (mem.Read<uint8_t>(entity + offsets::C_BaseEntity::m_lifeState) != 0)
-						continue;
-					int health = mem.Read<int>(entity + offsets::C_BaseEntity::m_iHealth);
-					int maxHealth = mem.Read<int>(entity + offsets::C_BaseEntity::m_iMaxHealth);
-					if (health <= 0 || maxHealth <= 0)
-						continue;
-
-					uint8_t team = mem.Read<uint8_t>(entity + offsets::C_BaseEntity::m_iTeamNum);
-					bool ally = (team == L.team);
-
-				// cheap filter first: only spend projection reads on
-				// creeps that are actually interesting
-				bool killNow = false, killSoon = false, deny = false;
-				if (!ally) {
-					// Conservative damage (low-roll) for reliable last-hit detection.
-					// Dota 2 applies +/-10% random on base damage per attack.
-					float cdmg = L.damage * 0.9f;
-					killNow = cdmg > 0 && health > 0 && health <= (int)cdmg;
-					killSoon = !killNow && cdmg > 0 && health > 0 && health <= (int)(cdmg * 1.15f);
-				} else {
-					deny = health > 0 && health <= (int)(maxHealth * s.denyPct * 0.01f);
-				}
-					if (!killNow && !killSoon && !deny)
-						continue;
-
-					Vector3 origin{};
-					if (!GetEntityOrigin(mem, entity, origin))
-						continue;
-					float dx = origin.x - L.origin.x, dy = origin.y - L.origin.y;
-					if (dx * dx + dy * dy > maxDistSq)
-						continue;
-
-					Vector3 head = origin; head.z += 60.0f;
-					Vector2 sFeet{}, sHead{};
-					if (!WorldToScreen(origin, sFeet, vm, screenW, screenH))
-						continue;
-					if (!WorldToScreen(head, sHead, vm, screenW, screenH))
-						continue;
-					float boxH = sFeet.y - sHead.y;
-					if (boxH <= 0)
-						continue;
-					float boxW = boxH * 0.6f;
-
-					CreepTarget c;
-					c.id = entity;
-					c.x = sHead.x - boxW * 0.5f;
-					c.y = sHead.y;
-					c.w = boxW;
-					c.h = boxH;
-					c.health = health;
-					c.maxHealth = maxHealth;
-					c.distance = sqrtf(dx * dx + dy * dy);
-					c.isKillableNow = killNow;
-					c.isKillableSoon = killSoon;
-					c.isDenyable = deny;
-					c.isAlly = ally;
-					c.name.set(name);
-					out.creeps.push_back(c);
+				// ---------------- LANE CREEPS (last-hit engine cache) --------
+				// All living lane creeps near the hero are handed to the
+				// last-hit engine, which tracks HP/projectile timing at high
+				// frequency on its own thread and draws the markers itself.
+				if (strstr(name, "creep")) {
+					if (mem.Read<uint8_t>(entity + offsets::C_BaseEntity::m_lifeState) == 0) {
+						Vector3 o{};
+						if (GetEntityOrigin(mem, entity, o))
+							AddCreepToCache(mem, st, entity, L, o, false);
+					}
 					continue;
 				}
 
 				// ---------------- ENEMY WARDS ----------------
-				if (strncmp(name, "npc_dota_ward", 13) == 0) {
+				// Ward UNIT designer names are npc_dota_observer_wards /
+				// npc_dota_sentry_wards (older builds: npc_dota_ward_*).
+				// The old code only knew the "npc_dota_ward" prefix, which no
+				// longer matches -> the wards toggle silently did nothing.
+				if (strncmp(name, "npc_dota_observer_wards", 23) == 0 ||
+					strncmp(name, "npc_dota_sentry_wards", 21) == 0 ||
+					strncmp(name, "npc_dota_ward", 13) == 0) {
 					uint8_t team = mem.Read<uint8_t>(entity + offsets::C_BaseEntity::m_iTeamNum);
 					if (team == L.team)
 						continue;
@@ -625,7 +619,7 @@ public:
 					float dx = origin.x - L.origin.x, dy = origin.y - L.origin.y;
 					if (dx * dx + dy * dy > maxDistSq)
 						continue;
-					bool sentry = strstr(name, "truesight") != nullptr;
+					bool sentry = strstr(name, "sentry") != nullptr;
 					MarkerTarget m;
 					m.kind = sentry ? Marker_WardSentry : Marker_WardObserver;
 					m.origin = origin;
