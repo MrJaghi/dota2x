@@ -5,6 +5,8 @@
 
 namespace service
 {
-	bool RegisterAndStart(const std::string& driver_path, const std::string& service_name);
-	bool StopAndRemove(const std::string& service_name);
+	// Direct NtLoadDriver-based registration/start (no SCM), matching DragonBurn's
+	// stable loader. Returns an NTSTATUS code (0 == STATUS_SUCCESS).
+	long RegisterAndStart(const std::wstring& driver_path, const std::wstring& service_name);
+	long StopAndRemove(const std::wstring& service_name);
 }
