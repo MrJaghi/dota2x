@@ -45,22 +45,23 @@ namespace OffsetValidator {
 	}
 
 	// ------------------------------------------------------------------
-	// Returns true when every checked offset looked valid.
+	// Global offsets (entity-list pointer, view matrix). Safe to run at
+	// attach time, even in the main menu.
 	// ------------------------------------------------------------------
-	inline bool ValidateAll(const Memory& mem) {
+	inline bool ValidateGlobals(const Memory& mem) {
 		uintptr_t base = mem.clientDllBase;
 		if (!base) {
 			printf("[!] client.dll base is NULL.\n");
 			return false;
 		}
-		printf("[*] Validating offsets against live client.dll...\n");
+		printf("[*] Validating global offsets against live client.dll...\n");
 		bool ok = true;
 
 		using namespace offsets;
 
 		if (!PlausiblePtr(mem.Read<uintptr_t>(base + client_dll::dwEntityList))) {
 			printf("[!] dwEntityList does not look valid -- offsets may be stale.\n");
-			return false;
+			ok = false;
 		}
 
 		// dwViewMatrix points DIRECTLY at a 16-float matrix (not a pointer).
@@ -79,28 +80,33 @@ namespace OffsetValidator {
 				ok = false;
 			}
 		}
+		if (ok) printf("[+] Global offsets look valid.\n");
+		return ok;
+	}
 
-		// Locate the local pawn via the (cached) entity walk.
-		uintptr_t entitySystem = mem.Read<uintptr_t>(base + client_dll::dwEntityList);
-		EntityReader::ScanState st;
-		EntityReader::ReadChunkPointers(mem, entitySystem, st);
-		EntityReader::RefreshLocal(mem, st);
+	// ------------------------------------------------------------------
+	// Per-entity checks against the LOCAL HERO. Called lazily -- once, the
+	// first time the scan thread actually resolves a local hero (which can
+	// be long after attach if the ESP started in the main menu or while a
+	// demo was still loading). The old build ran this exactly once at
+	// startup and complained "Could not locate the local hero" forever,
+	// even though the hero appeared seconds later.
+	// ------------------------------------------------------------------
+	inline void ValidateLocalEntity(const Memory& mem, uintptr_t pawn) {
+		if (!pawn) return;
+		printf("[+] Local hero @ 0x%llX -- running per-entity offset checks...\n",
+			(unsigned long long)pawn);
+		bool ok = true;
 
-		if (!st.localValid) {
-			printf("[!] Could not locate the local hero (start a match first) -- skipping per-entity checks.\n");
-			return false;
-		}
-		printf("[+] Local hero @ 0x%llX, running per-entity offset checks...\n",
-			(unsigned long long)st.local.pawn);
+		using namespace offsets;
 
-		// per-entity field checks
-		ok &= CheckI32(mem, st.local.pawn, C_BaseEntity::m_iHealth, 1, 5000, "C_BaseEntity::m_iHealth");
-		ok &= CheckI32(mem, st.local.pawn, C_BaseEntity::m_iMaxHealth, 1, 5000, "C_BaseEntity::m_iMaxHealth");
-		ok &= CheckU8(mem, st.local.pawn, C_BaseEntity::m_iTeamNum, 2, 3, "C_BaseEntity::m_iTeamNum");
-		ok &= CheckU8(mem, st.local.pawn, C_BaseEntity::m_lifeState, 0, 2, "C_BaseEntity::m_lifeState");
+		ok &= CheckI32(mem, pawn, C_BaseEntity::m_iHealth, 1, 5000, "C_BaseEntity::m_iHealth");
+		ok &= CheckI32(mem, pawn, C_BaseEntity::m_iMaxHealth, 1, 5000, "C_BaseEntity::m_iMaxHealth");
+		ok &= CheckU8(mem, pawn, C_BaseEntity::m_iTeamNum, 2, 3, "C_BaseEntity::m_iTeamNum");
+		ok &= CheckU8(mem, pawn, C_BaseEntity::m_lifeState, 0, 2, "C_BaseEntity::m_lifeState");
 
 		// m_vecAbsOrigin via the scene node
-		uintptr_t scene = mem.Read<uintptr_t>(st.local.pawn + C_BaseEntity::m_pGameSceneNode);
+		uintptr_t scene = mem.Read<uintptr_t>(pawn + C_BaseEntity::m_pGameSceneNode);
 		if (PlausiblePtr(scene)) {
 			Vector3 v = mem.Read<Vector3>(scene + CGameSceneNode::m_vecAbsOrigin);
 			bool coordsOk = fabsf(v.x) <= 16384.0f && fabsf(v.y) <= 16384.0f && fabsf(v.z) <= 16384.0f;
@@ -114,15 +120,14 @@ namespace OffsetValidator {
 		}
 
 		// mana fields (warn only)
-		float mana = mem.Read<float>(st.local.pawn + C_DOTA_BaseNPC::m_flMana);
-		float maxMana = mem.Read<float>(st.local.pawn + C_DOTA_BaseNPC::m_flMaxMana);
+		float mana = mem.Read<float>(pawn + C_DOTA_BaseNPC::m_flMana);
+		float maxMana = mem.Read<float>(pawn + C_DOTA_BaseNPC::m_flMaxMana);
 		if (mana < 0.0f || mana > 5000.0f || maxMana < 0.0f || maxMana > 5000.0f)
 			printf("[!] m_flMana / m_flMaxMana read (%.0f / %.0f) -- mana bar may be wrong.\n", mana, maxMana);
 
 		// NOTE: m_iCurrentLevel is deliberately not validated here (ignored).
 
-		if (ok) printf("[+] All offsets look valid.\n");
+		if (ok) printf("[+] All per-entity offsets look valid.\n");
 		else   printf("[!] Some offsets failed validation -- drop fresh dumper files into output\\ and REBUILD.\n");
-		return ok;
 	}
 }

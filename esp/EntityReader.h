@@ -87,10 +87,19 @@ public:
 		return true;
 	}
 
+	static size_t ChunkBytes() {
+		return (size_t)EntityLayout::Get().stride * (size_t)offsets::CGameEntitySystem::ChunkSize;
+	}
+
 	// Bulk-read the entity pointer table. One RPM call per non-null chunk.
+	// Every chunk gets ITS OWN slice of the buffer. (This used to be a single
+	// chunk-sized buffer that every chunk overwrote while EntityFromBuffer
+	// ignored the chunk index -- so only the LAST non-null chunk was ever
+	// visible and the local-hero search silently failed whenever the hero
+	// lived in an earlier chunk. That is exactly what produced
+	// "Could not locate the local hero" while standing in a demo/match.)
 	static void ReadChunkPointers(const Memory& mem, uintptr_t entitySystem, ScanState& st) {
-		const size_t stride = (size_t)EntityLayout::Get().stride;
-		const size_t chunkBytes = stride * (size_t)offsets::CGameEntitySystem::ChunkSize;
+		const size_t chunkBytes = ChunkBytes();
 
 		st.chunks.resize(ChunkCount);
 		for (int c = 0; c < ChunkCount; c++)
@@ -98,19 +107,23 @@ public:
 
 		// +8: the {stride=0x78, pInstance=0x78} layout variant reads exactly at
 		// the end of the last slot, so keep a small safety tail.
-		st.identityBuf.resize(chunkBytes + 8);
+		st.identityBuf.resize(chunkBytes * (size_t)ChunkCount + 8);
 		for (int c = 0; c < ChunkCount; c++) {
 			if (!st.chunks[c])
 				continue;
-			mem.ReadRaw(st.chunks[c], st.identityBuf.data(), chunkBytes);
+			mem.ReadRaw(st.chunks[c], st.identityBuf.data() + chunkBytes * (size_t)c, chunkBytes);
 		}
 	}
 
 	// Entity pointer for a chunk/slot, straight from the bulk buffer (no RPM).
 	static uintptr_t EntityFromBuffer(const ScanState& st, int ci, int slot) {
-		const size_t off = (size_t)EntityLayout::Get().stride * (size_t)slot
+		const size_t chunkBytes = ChunkBytes();
+		const size_t off = chunkBytes * (size_t)ci
+			+ (size_t)EntityLayout::Get().stride * (size_t)slot
 			+ (size_t)EntityLayout::Get().pInstance;
-		uintptr_t p;
+		if (off + sizeof(uintptr_t) > st.identityBuf.size())
+			return 0;
+		uintptr_t p = 0;
 		memcpy(&p, &st.identityBuf[off], sizeof(p));
 		return p;
 	}
@@ -451,7 +464,8 @@ public:
 				// name pointer straight from the bulk identity buffer -- zero
 				// RPM per entity (this used to be thousands of calls/scan).
 				// Buffer offset == chunkBase-relative identity addr: stride*slot + 0x20
-				const size_t nameOff = (size_t)EntityLayout::Get().stride * (size_t)slot + 0x20;
+				const size_t nameOff = ChunkBytes() * (size_t)ci
+					+ (size_t)EntityLayout::Get().stride * (size_t)slot + 0x20;
 				uintptr_t namePtr;
 				memcpy(&namePtr, &st.identityBuf[nameOff], sizeof(namePtr));
 				const char* name = CachedNamePtr(mem, st, namePtr);

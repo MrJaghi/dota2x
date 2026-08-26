@@ -403,7 +403,7 @@ private:
 		ImGui::TextUnformatted(value);
 	}
 
-	// ------------------------------------------------------------------
+	// ------------------------------------------------------------------	
 	static void DrawTitleRow(float dt) {
 		static const char* tabs[] = { "Visuals", "Players", "World", "Last Hit", "Misc", "Settings" };
 		ImDrawList* dl = ImGui::GetWindowDrawList();
@@ -411,18 +411,6 @@ private:
 		ImVec2 rowP = ImGui::GetCursorScreenPos();
 		float rowH = ImGui::GetTextLineHeight() + 20.0f;
 		float rowW = ImGui::GetContentRegionAvail().x;
-		ImGui::InvisibleButton("##dragstrip", ImVec2(rowW, rowH));
-		if (ImGui::IsItemActive() && ImGui::IsMouseDragging(ImGuiMouseButton_Left)) {
-			ImVec2 d = ImGui::GetIO().MouseDelta;
-			ImGui::SetWindowPos(ImVec2(ImGui::GetWindowPos().x + d.x, ImGui::GetWindowPos().y + d.y));
-			s_dragMoved = true;
-		}
-
-		if (fontBold) ImGui::PushFont(fontBold);
-		ImVec2 brandSz = ImGui::CalcTextSize("DRAGONBURN");
-		dl->AddText(ImVec2(rowP.x + rowW - brandSz.x - 118.0f, rowP.y + 9.0f), s_accent, "DRAGONBURN");
-		if (fontBold) ImGui::PopFont();
-		dl->AddText(ImVec2(rowP.x + rowW - 108.0f, rowP.y + 10.0f), IM_COL32(90, 220, 160, 255), "READ-ONLY");
 
 		float pillH = ImGui::GetTextLineHeight() + 10.0f;
 		float yP = rowP.y + (rowH - pillH) * 0.5f;
@@ -437,30 +425,54 @@ private:
 			x += tw[i] + 6.0f;
 		}
 
-		// sliding accent pill behind the active tab
+		// Tab pills are submitted BEFORE the drag strip. ImGui awards hover to
+		// the FIRST item submitted under the cursor (ItemHoverable refuses to
+		// steal an already-claimed HoveredId), so the old order -- a dragstrip
+		// InvisibleButton covering the whole row submitted first -- made every
+		// pill permanently un-hoverable and TAB CLICKS NEVER REGISTERED.
+		// (Reproduced and verified headless; the toggle rows only worked
+		// because nothing overlapped them.)
+		for (int i = 0; i < 6; i++) {
+			ImGui::SetCursorScreenPos(ImVec2(tx[i], yP));
+			ImGui::PushID(i);
+			// switch on the button's own release -- the exact mechanism the
+			// toggle rows use (the one interaction that always worked)
+			if (ImGui::InvisibleButton("##tab", ImVec2(tw[i], pillH)))
+				s_tab = i;
+			bool hovered = ImGui::IsItemHovered();
+			ImGui::PopID();
+
+			if (s_tab != i && hovered)
+				dl->AddRectFilled(ImVec2(tx[i], yP), ImVec2(tx[i] + tw[i], yP + pillH), IM_COL32(255, 255, 255, 10), 9.0f);
+		}
+
+		// sliding accent pill + labels (pure drawing, after the background)
 		static float pillX = 0.0f, pillW = 0.0f;
 		if (!s_pillInit) { pillX = tx[s_tab]; pillW = tw[s_tab]; s_pillInit = true; }
 		float k = 1.0f - expf(-dt * 12.0f);
 		pillX += (tx[s_tab] - pillX) * k;
 		pillW += (tw[s_tab] - pillW) * k;
 		dl->AddRectFilled(ImVec2(pillX, yP), ImVec2(pillX + pillW, yP + pillH), s_accent, 9.0f);
+		for (int i = 0; i < 6; i++)
+			dl->AddText(ImVec2(tx[i] + 13, yP + 5),
+				s_tab == i ? IM_COL32(6, 10, 16, 255) : IM_COL32(150, 158, 175, 255), tabs[i]);
 
-		for (int i = 0; i < 6; i++) {
-			ImGui::SetCursorScreenPos(ImVec2(tx[i], yP));
-			ImGui::PushID(i);
-			ImGui::InvisibleButton("##tab", ImVec2(tw[i], pillH));
-			bool hovered = ImGui::IsItemHovered();
-			if (hovered && ImGui::IsMouseClicked(0))
-				s_tab = i;
-			ImGui::PopID();
-
-			if (s_tab != i && hovered)
-				dl->AddRectFilled(ImVec2(tx[i], yP), ImVec2(tx[i] + tw[i], yP + pillH), IM_COL32(255, 255, 255, 10), 9.0f);
-			if (s_tab == i)
-				dl->AddText(ImVec2(tx[i] + 13, yP + 5), IM_COL32(6, 10, 16, 255), tabs[i]);
-			else
-				dl->AddText(ImVec2(tx[i] + 13, yP + 5), IM_COL32(150, 158, 175, 255), tabs[i]);
+		// Drag strip LAST: it only claims hover on parts of the row the pills
+		// do not cover (gaps, padding, brand area). Dragging the menu by its
+		// title still works; clicking a tab can never start a drag.
+		ImGui::SetCursorScreenPos(rowP);
+		ImGui::InvisibleButton("##dragstrip", ImVec2(rowW, rowH));
+		if (ImGui::IsItemActive() && ImGui::IsMouseDragging(ImGuiMouseButton_Left)) {
+			ImVec2 d = ImGui::GetIO().MouseDelta;
+			ImGui::SetWindowPos(ImVec2(ImGui::GetWindowPos().x + d.x, ImGui::GetWindowPos().y + d.y));
+			s_dragMoved = true;
 		}
+
+		if (fontBold) ImGui::PushFont(fontBold);
+		ImVec2 brandSz = ImGui::CalcTextSize("DRAGONBURN");
+		dl->AddText(ImVec2(rowP.x + rowW - brandSz.x - 118.0f, rowP.y + 9.0f), s_accent, "DRAGONBURN");
+		if (fontBold) ImGui::PopFont();
+		dl->AddText(ImVec2(rowP.x + rowW - 108.0f, rowP.y + 10.0f), IM_COL32(90, 220, 160, 255), "READ-ONLY");
 
 		ImGui::SetCursorScreenPos(ImVec2(rowP.x, rowP.y + rowH));
 	}

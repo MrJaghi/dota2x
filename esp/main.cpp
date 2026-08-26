@@ -66,6 +66,7 @@ private:
 	float fpsEMA = 60.0f;
 	ULONGLONG startTick = 0;
 	ULONGLONG lastLayoutProbe = 0;
+	bool localChecksDone = false;   // per-entity offset validation ran once
 
 public:
 	~GameClient() {
@@ -89,7 +90,7 @@ public:
 		uintptr_t entitySystem = memory.Read<uintptr_t>(memory.clientDllBase + offsets::client_dll::dwEntityList);
 		EntityLayout::Detect(memory, entitySystem);
 
-		OffsetValidator::ValidateAll(memory);
+		OffsetValidator::ValidateGlobals(memory);
 
 		UiManager::ApplyTheme();
 		printf("[+] Input: overlay is always click-through; the menu only routes\n"
@@ -99,6 +100,7 @@ public:
 			(char)settings.triggerKey);
 
 		startTick = GetTickCount64();
+		localChecksDone = false;
 
 		workersRunning = true;
 		scanThread = std::thread([this] { ScanWorker(); });
@@ -214,6 +216,14 @@ private:
 			EntityReader::RefreshLocal(memory, scanState);
 			meta.local = scanState.local;
 			meta.localValid = scanState.localValid;
+
+			// The per-entity offset checks need a live hero, which may only
+			// exist long after attach (ESP started from the menu / demo still
+			// loading). Run them ONCE, the first time the hero resolves.
+			if (scanState.localValid && !localChecksDone) {
+				localChecksDone = true;
+				OffsetValidator::ValidateLocalEntity(memory, scanState.local.pawn);
+			}
 
 			if (!scanState.localValid) {
 				localOut.heroes.clear();
